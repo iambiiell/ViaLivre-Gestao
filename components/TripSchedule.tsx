@@ -495,7 +495,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
                   <input type="date" className="pl-6 pr-4 py-4 bg-slate-50 dark:bg-zinc-900 rounded-2xl text-sm font-bold dark:text-zinc-100 border-none shadow-inner" value={filterDate || ''} onChange={(e) => setFilterDate(e.target.value)} />
               </div>
           </div>
-          <button onClick={() => { setEditingId(null); setFormData({ trip_date: filterDate, status: 'Agendada', departure_time: '', company_id: filterCompanyId, ignore_company_filter: ignoreCompanyFilter, passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } } }); setIsModalOpen(true); }} className="w-full md:w-auto px-10 py-5 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-slate-900"><Plus size={20} /> Adicionar Programação</button>
+          <button onClick={() => { setEditingId(null); setFormData({ trip_date: filterDate, status: 'Agendada', departure_time: '00:00', company_id: filterCompanyId, ignore_company_filter: ignoreCompanyFilter, passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } } }); setIsModalOpen(true); }} className="w-full md:w-auto px-10 py-5 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-slate-900"><Plus size={20} /> Adicionar Programação</button>
       </div>
 
       <div className="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory md:grid md:grid-cols-1 xl:grid-cols-2 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
@@ -817,7 +817,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
                                               driver_search: '',
                                               conductor_id: '',
                                               conductor_search: '',
-                                              departure_time: '',
+                                              departure_time: '00:00',
                                               direction: ''
                                           });
                                       }}

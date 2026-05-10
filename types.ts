@@ -160,6 +160,13 @@ export interface User {
   daily_hours_target?: string;
   standard_clock_in?: string;
   standard_clock_out?: string;
+  standard_interval?: string;
+  saturday_clock_in?: string;
+  saturday_clock_out?: string;
+  saturday_interval?: string;
+  sunday_clock_in?: string;
+  sunday_clock_out?: string;
+  sunday_interval?: string;
   permissions?: ViewState[];
   is_full_admin?: boolean;
   activation_key?: string;
@@ -226,7 +233,7 @@ export interface ActivationKey {
   id: string;
   system_id?: string;
   key_code: string;
-  plan_type: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL' | 'LIFETIME';
+  plan_type: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL' | 'LIFETIME' | 'TRIAL';
   price: number;
   duration_months: number;
   is_used: boolean;
@@ -243,7 +250,7 @@ export interface ActivationKey {
 export interface Subscription {
   id: string;
   system_id: string;
-  plan_type: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL' | 'LIFETIME';
+  plan_type: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL' | 'LIFETIME' | 'TRIAL';
   activated_at: string;
   expires_at: string;
   status: 'ACTIVE' | 'EXPIRED' | 'CANCELED';

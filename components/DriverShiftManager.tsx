@@ -103,7 +103,7 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
               className="px-6 py-3 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-xl font-black uppercase text-[10px] tracking-widest outline-none border-2 border-transparent focus:border-yellow-400 transition-all"
             />
             <button 
-              onClick={() => { setEditingShift({ date: filterDate }); setIsModalOpen(true); }}
+              onClick={() => { setEditingShift({ date: filterDate, start_time: '00:00', end_time: '00:00' }); setIsModalOpen(true); }}
               className="px-6 py-3 bg-yellow-400 text-slate-900 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg border-2 border-slate-900 active:scale-95 transition-all flex items-center gap-2"
             >
               <Plus size={18} /> Novo Turno

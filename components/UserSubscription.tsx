@@ -201,7 +201,8 @@ const UserSubscription: React.FC<UserSubscriptionProps> = ({ currentUser, addToa
       'QUARTERLY': 'Trimestral',
       'SEMI_ANNUAL': 'Semestral',
       'ANNUAL': 'Anual',
-      'LIFETIME': 'Vitalício'
+      'LIFETIME': 'Vitalício',
+      'TRIAL': 'Teste Grátis (7 dias)'
     };
     return labels[type] || type;
   };

@@ -208,8 +208,13 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
     job_title: '', role: 'DRIVER',
     work_municipality_id: '',
     login_acesso: '', senha_acesso: '',
-    work_shift_type: '6x1', daily_hours_target: '08:00',
-    standard_clock_in: '08:00', standard_clock_out: '17:00',
+    work_shift_type: '6x1', daily_hours_target: '00:00',
+    standard_clock_in: '00:00', standard_clock_out: '00:00',
+    standard_interval: '00:00',
+    saturday_clock_in: '00:00', saturday_clock_out: '00:00',
+    saturday_interval: '00:00',
+    sunday_clock_in: '00:00', sunday_clock_out: '00:00',
+    sunday_interval: '00:00',
     blood_type: '', photo_url: '', birth_date: '', admission_date: '',
     cep: '', address_street: '', address_number: '', address_neighborhood: '', address_city: '', address_state: '',
     license_type: '', license_validity: '',
@@ -238,7 +243,7 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
   };
   const [activeTab, setActiveTab] = useState<'BASIC' | 'ADDRESS' | 'SHIFT' | 'OCCURRENCES' | 'VIOLATIONS'>('BASIC');
   const [occurrences, setOccurrences] = useState<any[]>([]);
-  const [newOccurrence, setNewOccurrence] = useState({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '', is_justified: false });
+  const [newOccurrence, setNewOccurrence] = useState({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
 
   const cleanCPF = (val: string) => val.replace(/\D/g, '');
 
@@ -785,19 +790,64 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
                           </div>
                       </div>
 
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800 space-y-6">
-                            <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-3">Horários Padrão</p>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Entrada Padrão</label>
-                                    <input type="time" className={inputClass('standard_clock_in')} value={formData.standard_clock_in || ''} onChange={e => setFormData({...formData, standard_clock_in: e.target.value})} />
+                      <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800 space-y-6 md:col-span-2">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-3">Dias Úteis</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Entrada</label>
+                                            <input type="time" className={inputClass('standard_clock_in')} value={formData.standard_clock_in || ''} onChange={e => setFormData({...formData, standard_clock_in: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Saída</label>
+                                            <input type="time" className={inputClass('standard_clock_out')} value={formData.standard_clock_out || ''} onChange={e => setFormData({...formData, standard_clock_out: e.target.value})} />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Intervalo (Horas)</label>
+                                            <input type="time" className={inputClass('standard_interval')} value={formData.standard_interval || ''} onChange={e => setFormData({...formData, standard_interval: e.target.value})} />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Saída Padrão</label>
-                                    <input type="time" className={inputClass('standard_clock_out')} value={formData.standard_clock_out || ''} onChange={e => setFormData({...formData, standard_clock_out: e.target.value})} />
+
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-3">Sábado</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Entrada</label>
+                                            <input type="time" className={inputClass('saturday_clock_in')} value={formData.saturday_clock_in || ''} onChange={e => setFormData({...formData, saturday_clock_in: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Saída</label>
+                                            <input type="time" className={inputClass('saturday_clock_out')} value={formData.saturday_clock_out || ''} onChange={e => setFormData({...formData, saturday_clock_out: e.target.value})} />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Intervalo (Horas)</label>
+                                            <input type="time" className={inputClass('saturday_interval')} value={formData.saturday_interval || ''} onChange={e => setFormData({...formData, saturday_interval: e.target.value})} />
+                                        </div>
+                                    </div>
                                 </div>
-                                <div className="col-span-2">
-                                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Carga Horária Diária</label>
+
+                                <div className="space-y-4">
+                                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-3">Dom/Feriados</p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Entrada</label>
+                                            <input type="time" className={inputClass('sunday_clock_in')} value={formData.sunday_clock_in || ''} onChange={e => setFormData({...formData, sunday_clock_in: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Saída</label>
+                                            <input type="time" className={inputClass('sunday_clock_out')} value={formData.sunday_clock_out || ''} onChange={e => setFormData({...formData, sunday_clock_out: e.target.value})} />
+                                        </div>
+                                        <div className="col-span-2">
+                                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Intervalo (Horas)</label>
+                                            <input type="time" className={inputClass('sunday_interval')} value={formData.sunday_interval || ''} onChange={e => setFormData({...formData, sunday_interval: e.target.value})} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="col-span-1 md:col-span-3 pt-4 border-t border-slate-200 dark:border-zinc-800">
+                                    <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Carga Horária Diária Meta</label>
                                     <input type="time" className={inputClass('daily_hours_target')} value={formData.daily_hours_target || ''} onChange={e => setFormData({...formData, daily_hours_target: e.target.value})} />
                                 </div>
                             </div>
@@ -872,7 +922,7 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
                           onClick={() => {
                             if (!newOccurrence.description) return alert("Preencha a descrição.");
                             setOccurrences([...occurrences, { ...newOccurrence, id: Date.now().toString() }]);
-                            setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '', is_justified: false });
+                            setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
                           }}
                           className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-black transition-all"
                         >

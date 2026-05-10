@@ -39,6 +39,7 @@ const PLANS = [
   { type: 'SEMI_ANNUAL', label: 'Semestral', price: 999.00, duration: 180, months: 6 },
   { type: 'ANNUAL', label: 'Anual', price: 1799.00, duration: 365, months: 12 },
   { type: 'LIFETIME', label: 'Vitalício', price: 4999.00, duration: 36500, months: 120 },
+  { type: 'TRIAL', label: 'Teste (7 dias)', price: 0.00, duration: 7, months: 0.25 },
 ] as const;
 
 const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, addToast }) => {
@@ -203,7 +204,8 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
       'QUARTERLY': 3,
       'SEMI_ANNUAL': 6,
       'ANNUAL': 12,
-      'LIFETIME': 120
+      'LIFETIME': 120,
+      'TRIAL': 0.25
     };
     return map[type] || 0;
   };
@@ -425,7 +427,9 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
                       </td>
                       <td className="px-8 py-6">
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                          {key.duration_months === 999 ? 'Vitalício' : `${key.duration_months || getMonths(key.plan_type)} ${(key.duration_months || getMonths(key.plan_type)) === 1 ? 'Mês' : 'Meses'}`}
+                          {key.plan_type === 'TRIAL' ? '7 Dias' : 
+                          key.duration_months === 999 ? 'Vitalício' : 
+                          `${key.duration_months || getMonths(key.plan_type)} ${(key.duration_months || getMonths(key.plan_type)) === 1 ? 'Mês' : 'Meses'}`}
                         </span>
                       </td>
                       <td className="px-8 py-6">

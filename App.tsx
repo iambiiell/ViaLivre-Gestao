@@ -1,6 +1,6 @@
 
 import React, { Component, useState, useEffect, useCallback, ErrorInfo, ReactNode, useRef } from 'react';
-import { Loader2, BusFront, X, AlertTriangle, CheckCircle2, Coffee, Sparkles, AlertCircle } from 'lucide-react';
+import { Loader2, BusFront, X, AlertTriangle, CheckCircle2, Coffee, Sparkles, AlertCircle, RefreshCw, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Topbar from './components/Sidebar'; 
 import Dashboard from './components/Dashboard';
@@ -132,6 +132,8 @@ const App: React.FC = () => {
   const [userFines, setUserFines] = useState<UserFine[]>([]);
   const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [showTrialWarning, setShowTrialWarning] = useState(false);
+  const [isPurging, setIsPurging] = useState(false);
   const [skins, setSkins] = useState<Skin[]>([]);
   const [showTutorial, setShowTutorial] = useState(false);
   const [isClockedIn, setIsClockedIn] = useState<boolean | null>(null);
@@ -282,8 +284,39 @@ const App: React.FC = () => {
       } else if (tt.status === 'rejected' || !currentUser) {
         setIsClockedIn(false);
       }
-      if (subs.status === 'fulfilled' && subs.value && subs.value.length > 0) {
-        setSubscription(subs.value[0]);
+      if (subs.status === 'fulfilled') {
+        if (subs.value && subs.value.length > 0) {
+          const activeSub = subs.value[0] as Subscription;
+          setSubscription(activeSub);
+          
+          // Check for 6th day trial warning
+          if (activeSub.plan_type === 'TRIAL' && activeSub.status === 'ACTIVE') {
+            const expiresAt = new Date(activeSub.expires_at);
+            const now = new Date();
+            const diffTime = expiresAt.getTime() - now.getTime();
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            // If 1 day left (6th day of 7), and user is admin
+            if (diffDays === 1 && !localStorage.getItem(`vialivre_trial_warned_${activeSub.id}`)) {
+              setShowTrialWarning(true);
+            }
+          }
+        } else if (currentUser && db.getSystemId() && currentUser.role === 'ADMIN') {
+          // Auto-create 7-day trial if no subscription exists
+          const trialExpires = new Date();
+          trialExpires.setDate(trialExpires.getDate() + 7);
+          const newTrial: Partial<Subscription> = {
+            system_id: db.getSystemId()!,
+            plan_type: 'TRIAL' as any,
+            activated_at: new Date().toISOString(),
+            expires_at: trialExpires.toISOString(),
+            status: 'ACTIVE' as any,
+            created_at: new Date().toISOString()
+          };
+          db.create('subscriptions', newTrial).then(s => {
+            if (s) setSubscription(s as Subscription);
+          });
+        }
       }
       if (settings.status === 'fulfilled' && settings.value && settings.value.length > 0) {
         const s = settings.value[0];
@@ -584,6 +617,48 @@ const App: React.FC = () => {
   };
 
   console.log('Current state:', { isLoading, showWelcome, showGoodbye, isPassengerMode, currentUser: !!currentUser });
+  const handlePurgeData = async () => {
+    setIsPurging(true);
+    try {
+      const tablesToClear = db.getIsolatedTables();
+      // Keep subscriptions table to mark it as EXPIRED or similar? 
+      // Actually the user said "todos os cadastros realizados no sistema serão apagados automaticamente"
+      // I should clear everything except maybe the subscription itself (to prevent immediate re-trial?)
+      // or clear that too.
+      
+      for (const table of tablesToClear) {
+        if (table === 'subscriptions') continue;
+        await db.clearTable(table);
+      }
+      
+      // Mark subscription as canceled/expired
+      if (subscription) {
+        await db.update('subscriptions', { ...subscription, status: 'CANCELED' });
+      }
+      
+      addToast("Todos os dados do sistema foram apagados com sucesso.", "success");
+      setShowTrialWarning(false);
+      handleSetUser(null); // Logout
+    } catch (error) {
+      console.error('Error purging data:', error);
+      addToast("Erro ao apagar dados do sistema.", "error");
+    } finally {
+      setIsPurging(false);
+    }
+  };
+
+  const handleKeepSystem = () => {
+    const phone = systemSettings?.support_phone || '5511999999999'; // Default or from settings
+    const message = encodeURIComponent(`Olá! Meu período de teste no ViaLivre Gestão está terminando e gostaria de adquirir uma assinatura para manter meus dados.`);
+    window.open(`https://wa.me/${phone.replace(/\D/g, '')}?text=${message}`, '_blank');
+    
+    // Mark as warned so it doesn't pop up every refresh until next day
+    if (subscription) {
+      localStorage.setItem(`vialivre_trial_warned_${subscription.id}`, 'true');
+    }
+    setShowTrialWarning(false);
+  };
+
   if (isLoading) return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 flex items-center justify-center flex-col gap-6">
         <motion.div
@@ -989,6 +1064,67 @@ const App: React.FC = () => {
                   >
                     Entendido
                   </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showTrialWarning && (
+            <div className="fixed inset-0 z-[3000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="bg-white dark:bg-zinc-900 w-full max-w-lg rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden"
+              >
+                <div className="p-8 text-center space-y-6">
+                  <div className="w-20 h-20 bg-yellow-400 rounded-3xl mx-auto flex items-center justify-center text-slate-900 shadow-xl border-4 border-white dark:border-zinc-800">
+                    <AlertTriangle size={40} className="fill-current" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white leading-tight">
+                      Período de Teste Quase Expirado!
+                    </h2>
+                    <p className="text-xs font-bold text-slate-500 leading-relaxed">
+                      Sua licença de teste gratuito de 7 dias expira em breve (6º dia). Para continuar gerenciando sua frota sem interrupções e manter seus dados salvos, você deve adquirir uma assinatura.
+                    </p>
+                  </div>
+
+                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/50">
+                    <div className="flex items-center justify-center gap-3 text-red-600 dark:text-red-400 mb-1">
+                      <AlertCircle size={18} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Aviso Crítico</span>
+                    </div>
+                    <p className="text-[10px] text-red-500/80 font-bold leading-tight uppercase text-center">
+                      Caso opte por NÃO, TODOS os dados cadastrados serão apagados.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 pt-4">
+                    <button 
+                      onClick={handleKeepSystem}
+                      className="w-full bg-slate-900 dark:bg-yellow-400 text-white dark:text-slate-900 py-5 rounded-[2rem] font-black uppercase text-xs tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all"
+                    >
+                      <Sparkles size={18} className="text-yellow-400 dark:text-slate-900" />
+                      Manter meu Sistema
+                    </button>
+                    
+                    <button 
+                      onClick={() => {
+                        if (window.confirm("VOCÊ TEM CERTEZA? Se selecionar 'NÃO', TODOS os cadastros realizados no sistema serão apagados AUTOMATICAMENTE agora. Esta ação é IRREVERSÍVEL.")) {
+                          handlePurgeData();
+                        }
+                      }}
+                      disabled={isPurging}
+                      className="w-full text-slate-400 hover:text-red-600 font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 transition-all transition-colors"
+                    >
+                      {isPurging ? <RefreshCw size={14} className="animate-spin" /> : <X size={14} />}
+                      Não, não desejo manter
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             </div>

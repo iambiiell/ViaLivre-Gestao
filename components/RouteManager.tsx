@@ -26,7 +26,7 @@ const RouteManager: React.FC<RouteManagerProps> = ({ routes = [], companies = []
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ModalTab>('geral');
   const [searchTerm, setSearchTerm] = useState('');
-  const [newTimes, setNewTimes] = useState<{ weekdays: string, saturday: string, sunday: string }>({ weekdays: '', saturday: '', sunday: '' });
+  const [newTimes, setNewTimes] = useState<{ weekdays: string, saturday: string, sunday: string }>({ weekdays: '00:00', saturday: '00:00', sunday: '00:00' });
   const [bulkInput, setBulkInput] = useState<{ weekdays: string, saturday: string, sunday: string }>({ weekdays: '', saturday: '', sunday: '' });
   const [showBulk, setShowBulk] = useState<{ weekdays: boolean, saturday: boolean, sunday: boolean }>({ weekdays: false, saturday: false, sunday: false });
 
