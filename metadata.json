@@ -1,0 +1,7 @@
+{
+  "name": "Remix: ViaLivre Gestão",
+  "description": "Sistema inteligente para gerenciamento de frotas, rotas de ônibus e escalas operacionais.",
+  "requestFramePermissions": [
+    "notifications"
+  ]
+}
