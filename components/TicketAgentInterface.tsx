@@ -861,7 +861,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
           ) : (
               <div className="space-y-8">
                   {/* Resumo da Viagem Selecionada */}
-                  {selectedRoute && selectedTrip && (
+                  {selectedRoute && (
                       <div className="animate-in fade-in slide-in-from-top-4 bg-slate-900 text-white p-6 rounded-3xl border-2 border-yellow-400 flex flex-wrap items-center justify-between gap-6 shadow-xl">
                           <div className="flex items-center gap-4">
                               <div className="p-3 bg-yellow-400 rounded-2xl text-slate-900">
@@ -873,6 +873,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                        {(selectedSection ? selectedSection.origin : selectedRoute.origin || '').toUpperCase()} 
                                        <ArrowRight size={16} className="inline mx-1" /> 
                                        {(selectedSection ? selectedSection.destination : selectedRoute.destination || '').toUpperCase()}
+                                       {selectedSection && <span className="ml-2 text-[10px] not-italic bg-blue-600 text-white px-2 py-0.5 rounded-md">SEÇÃO</span>}
                                    </h4>
                               </div>
                           </div>
@@ -885,20 +886,24 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                       <span className="text-sm font-black uppercase italic">{selectedCompany?.name || '---'}</span>
                                   </div>
                               </div>
-                              <div className="text-center md:text-left">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Partida</p>
-                                  <div className="flex items-center gap-2">
-                                      <Clock size={16} className="text-yellow-400" />
-                                      <span className="text-lg font-black font-mono">{selectedTrip.departure_time}</span>
+                              {selectedTrip && (
+                                <>
+                                  <div className="text-center md:text-left">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Partida</p>
+                                      <div className="flex items-center gap-2">
+                                          <Clock size={16} className="text-yellow-400" />
+                                          <span className="text-lg font-black font-mono">{selectedTrip.departure_time}</span>
+                                      </div>
                                   </div>
-                              </div>
-                              <div className="text-center md:text-left">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Veículo</p>
-                                  <div className="flex items-center gap-2">
-                                      <Tag size={16} className="text-yellow-400" />
-                                      <span className="text-lg font-black uppercase italic">#{selectedTrip.bus_number}</span>
+                                  <div className="text-center md:text-left">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Veículo</p>
+                                      <div className="flex items-center gap-2">
+                                          <Tag size={16} className="text-yellow-400" />
+                                          <span className="text-lg font-black uppercase italic">#{selectedTrip.bus_number}</span>
+                                      </div>
                                   </div>
-                              </div>
+                                </>
+                              )}
                               <div className="text-center md:text-left">
                                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Base</p>
                                   <div className="flex items-center gap-2">
@@ -1036,7 +1041,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                                           }
                                                       }
                                                       setStep(2);
-                                                  }} className="w-full flex items-center justify-between p-6 bg-white dark:bg-zinc-800 rounded-3xl border-2 border-transparent hover:border-yellow-400 shadow-sm transition-all group">
+                                                  }} className={`w-full flex items-center justify-between p-6 bg-white dark:bg-zinc-900 rounded-3xl border-2 transition-all group ${selectedRouteId === r.id ? 'border-yellow-400 bg-yellow-50/30 dark:bg-yellow-900/10' : 'border-transparent hover:border-yellow-400 shadow-sm'}`}>
                                                       <div className="text-left">
                                                           <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest leading-none mb-1">Linha {r.prefixo_linha} • {company?.name}</p>
                                                           <p className="font-black text-lg uppercase italic dark:text-white">
@@ -1088,11 +1093,11 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                           <button onClick={() => setStep(1)} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 hover:text-yellow-600 transition-colors"><ChevronLeft size={16}/> Voltar para linhas</button>
                           
                           {selectedRoute?.sections && selectedRoute.sections.length > 0 && (
-                            <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-[2rem] border-2 border-yellow-400 mb-6">
-                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Selecione o Trecho / Seção</label>
+                            <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-[2rem] border-2 border-yellow-400 mb-6 shadow-sm">
+                                <label className="block text-[10px] font-black text-indigo-500 uppercase mb-2 ml-2 tracking-widest">Trecho / Seção Selecionada</label>
                                 <select 
-                                    className="w-full px-6 py-4 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl font-black text-xs outline-none focus:border-yellow-400 dark:text-white uppercase"
-                                    value={selectedSectionIndex || ''}
+                                    className="w-full px-6 py-4 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl font-black text-xs outline-none focus:border-yellow-400 dark:text-white uppercase transition-all"
+                                    value={selectedSectionIndex}
                                     onChange={(e) => {
                                         const newIndex = Number(e.target.value);
                                         setSelectedSectionIndex(newIndex);
