@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { BusRoute, Trip, User, TicketSale, Vehicle, Company, TicketingConfig, PassengerDetails, City } from '../types';
+import { BusRoute, Trip, User, TicketSale, Vehicle, Company, TicketingConfig, PassengerDetails, City, TicketBooth } from '../types';
 import { Bus, MapPin, Calendar, Clock, DollarSign, X, Printer, QrCode, CreditCard, Wallet, Loader2, ArrowRight, Search, UserPlus, History, CheckCircle2, ChevronLeft, ChevronRight, Ticket, Tag, Users, Info, ShieldCheck, Edit3, Download, Disc, Mail, Home, ReceiptText, ShieldAlert, Scissors, ZoomIn, ZoomOut, Bell, Save } from 'lucide-react';
 import { cpfMask, phoneMask, cepMask, validateCPF } from '../utils/masks';
 import { fetchAddress } from '../services/cep';
 import { db } from '../services/database';
 import TicketVoucher from './TicketVoucher';
 import { downloadTicket as generateTicketPdf } from './TicketGenerator';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface PassengerForm {
     full_name: string;
@@ -39,6 +40,8 @@ interface TicketAgentInterfaceProps {
   addToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
   isPassengerView?: boolean;
   initialTripId?: string;
+  initialRouteId?: string;
+  initialPassengerData?: any;
 }
 
 const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({ 
@@ -52,15 +55,18 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   addToast,
   isPassengerView = false,
   ticketingConfig,
-  initialTripId
+  initialTripId,
+  initialRouteId,
+  initialPassengerData
 }) => {
   const [activeView, setActiveView] = useState<'venda' | 'historico' | 'bilhete'>('venda');
-  const [step, setStep] = useState(initialTripId ? 3 : 1);
+  const [step, setStep] = useState(initialTripId ? 3 : initialRouteId ? 2 : 1);
   const [isLoadingCep, setIsLoadingCep] = useState(false);
   const [originSearchTerm, setOriginSearchTerm] = useState('');
   const [destinationSearchTerm, setDestinationSearchTerm] = useState('');
+  const [lineSearchTerm, setLineSearchTerm] = useState('');
   
-  const [selectedRouteId, setSelectedRouteId] = useState<string>('');
+  const [selectedRouteId, setSelectedRouteId] = useState<string>(initialRouteId || '');
   const [selectedTripId, setSelectedTripId] = useState<string>(initialTripId || '');
   const [saleDate, setSaleDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [originSearch, setOriginSearch] = useState('');
@@ -69,21 +75,33 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const [showDestinationDropdown, setShowDestinationDropdown] = useState(false);
   const [showNoRoutesMessage, setShowNoRoutesMessage] = useState(false);
   const [selectedSeats, setSelectedSeats] = useState<number[]>([]);
+  const [salesRefreshKey, setSalesRefreshKey] = useState(0);
   const [selectedSectionIndex, setSelectedSectionIndex] = useState<number>(-1);
   const [passengerForms, setPassengerForms] = useState<Record<number, PassengerForm>>({});
   const [paymentMethod, setPaymentMethod] = useState<string>('DINHEIRO');
+  const [amountReceived, setAmountReceived] = useState<number>(0);
+  const [changeAmount, setChangeAmount] = useState<number>(0);
   const [couponCode, setCouponCode] = useState('');
   const [discountValue, setDiscountValue] = useState(0);
 
   // Reset discount if payment method changes to avoid bypass of coupon restrictions
   useEffect(() => {
+    const normalizedMethod = (paymentMethod || '').toUpperCase().replace(/[_]/g, ' ');
     if (discountValue > 0) {
       setDiscountValue(0);
       setCouponCode('');
-      addToast("A forma de pagamento mudou. Re-aplique o cupom se necessário.", "info");
+      addToast(`Pagamento alterado para ${normalizedMethod}. Re-aplique o cupom se necessário.`, "info");
+    }
+    if (normalizedMethod !== 'DINHEIRO') {
+      setAmountReceived(0);
+      setChangeAmount(0);
     }
   }, [paymentMethod]);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [isVerifyingVt, setIsVerifyingVt] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+  const [vtIdentifier, setVtIdentifier] = useState('');
   const [impCardIdentifier, setImpCardIdentifier] = useState('');
   const [isVerifyingImpCard, setIsVerifyingImpCard] = useState(false);
   const [isPresale, setIsPresale] = useState(false);
@@ -97,6 +115,50 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const [editingSale, setEditingSale] = useState<TicketSale | null>(null);
   const [isUpdatingSale, setIsUpdatingSale] = useState(false);
   const [saleIdBeingEdited, setSaleIdBeingEdited] = useState<string | null>(null);
+  const [ticketBooths, setTicketBooths] = useState<TicketBooth[]>([]);
+  const [selectedBoothId, setSelectedBoothId] = useState<string>('');
+
+  useEffect(() => {
+    db.getTicketBooths().then(booths => {
+        setTicketBooths(booths);
+        if (booths.length > 0) {
+            // Try to find a booth assigned to this user or just pick the first active one
+            const activeBooths = booths.filter(b => b.active);
+            if (activeBooths.length > 0) setSelectedBoothId(activeBooths[0].id);
+        }
+    });
+  }, []);
+
+  // Pre-fill passenger info from initial data if coming from Passenger Interface
+  useEffect(() => {
+    if (initialPassengerData && selectedSeats.length > 0) {
+      const firstSeat = selectedSeats[0];
+      if (!passengerForms[firstSeat]?.full_name) {
+        setPassengerForms(prev => ({
+          ...prev,
+          [firstSeat]: {
+            ...prev[firstSeat],
+            full_name: `${initialPassengerData.name || ''} ${initialPassengerData.surname || ''}`.trim().toUpperCase(),
+            cpf: initialPassengerData.cpf || '',
+            phone: initialPassengerData.phone || '',
+            email: (initialPassengerData.email || '').toLowerCase(),
+            birth_date: initialPassengerData.birth_date || '',
+            cep: initialPassengerData.cep || '',
+            street: (initialPassengerData.address_street || '').toUpperCase(),
+            number: (initialPassengerData.address_number || '').toUpperCase(),
+            neighborhood: (initialPassengerData.address_neighborhood || '').toUpperCase(),
+            city: (initialPassengerData.address_city || '').toUpperCase(),
+            state: (initialPassengerData.address_state || '').toUpperCase(),
+            complement: (initialPassengerData.address_complement || '').toUpperCase(),
+            seat_number: firstSeat,
+            responsible_name: initialPassengerData.responsible_name || '',
+            responsible_birth_date: initialPassengerData.responsible_birth_date || '',
+            relationship: initialPassengerData.relationship || ''
+          } as any
+        }));
+      }
+    }
+  }, [initialPassengerData, selectedSeats]);
 
   // Helper calculation for grand total
   const getGrandTotal = (withDiscount: boolean = true) => {
@@ -108,9 +170,14 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
     let extra = 0;
 
     if (selectedSection) {
-        base = selectedSection.price || 0;
-        toll = selectedSection.toll || 0;
-        boarding = selectedSection.boarding_fee || 0;
+        // User request: For sections, toll and fees must follow the integral route (selectedRoute)
+        toll = selectedRoute.toll || 0;
+        boarding = selectedRoute.boarding_fee || 0;
+        extra = selectedRoute.fees || 0;
+        
+        // Base fare is generated by subtracting these from the section price
+        const sectionTotal = selectedSection.price || 0;
+        base = Math.max(0, sectionTotal - toll - boarding - extra);
     } else {
         base = selectedRoute.price || 0;
         toll = selectedRoute.toll || 0;
@@ -122,6 +189,15 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
     const total = perSeat * selectedSeats.length;
     return withDiscount ? Math.max(0, total - discountValue) : total;
   };
+
+  useEffect(() => {
+    const total = getGrandTotal();
+    if (amountReceived > 0) {
+      setChangeAmount(Math.max(0, amountReceived - total));
+    } else {
+      setChangeAmount(0);
+    }
+  }, [amountReceived, discountValue, selectedSeats]);
 
   useEffect(() => {
     if (activeView === 'historico') {
@@ -206,6 +282,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   };
 
   const selectedRoute = useMemo(() => routes.find(r => r.id === selectedRouteId), [routes, selectedRouteId]);
+  const selectedBooth = useMemo(() => ticketBooths.find(b => b.id === selectedBoothId), [ticketBooths, selectedBoothId]);
   const selectedSection = useMemo(() => {
     if (selectedRoute && selectedSectionIndex !== -1 && selectedRoute.sections) {
       return selectedRoute.sections[selectedSectionIndex];
@@ -265,23 +342,40 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const filteredRoutes = useMemo(() => {
     const oSearch = normalize(originSearch || '');
     const dSearch = normalize(destinationSearch || '');
-    if (!oSearch || !dSearch) return [];
+    const lSearch = normalize(lineSearchTerm || '');
     
     return routes
       .filter(r => r.route_type === 'RODOVIARIA' || r.route_type === 'INTERMUNICIPAL')
       .filter(r => {
         const rOrigin = normalize(r.origin || '');
         const rDest = normalize(r.destination || '');
+        const rPrefix = normalize(r.prefixo_linha || '');
+        const rName = normalize(r.name || '');
 
-        const idaMatch = (rOrigin === oSearch && rDest === dSearch) || 
-                         r.sections?.some(s => normalize(s.origin || '') === oSearch && normalize(s.destination || '') === dSearch);
-        
-        const voltaMatch = (rDest === oSearch && rOrigin === dSearch) || 
-                           r.sections?.some(s => normalize(s.destination || '') === oSearch && normalize(s.origin || '') === dSearch);
+        // If line search is provided, filter by it first
+        if (lSearch) {
+          const matchesLine = rPrefix.includes(lSearch) || rName.includes(lSearch);
+          if (!matchesLine) return false;
+        }
 
-        return idaMatch || voltaMatch;
-      });
-  }, [routes, originSearch, destinationSearch]);
+        // If origin/dest search provided, they must match
+        if (oSearch || dSearch) {
+          const idaMatch = (oSearch ? rOrigin.includes(oSearch) : true) && 
+                           (dSearch ? rDest.includes(dSearch) : true) || 
+                           r.sections?.some(s => (oSearch ? normalize(s.origin || '').includes(oSearch) : true) && (dSearch ? normalize(s.destination || '').includes(dSearch) : true));
+          
+          const voltaMatch = (oSearch ? rDest.includes(oSearch) : true) && 
+                             (dSearch ? rOrigin.includes(dSearch) : true) || 
+                             r.sections?.some(s => (oSearch ? normalize(s.destination || '').includes(oSearch) : true) && (dSearch ? normalize(s.origin || '').includes(dSearch) : true));
+
+          return idaMatch || voltaMatch;
+        }
+
+        // If only line search is provided and it matched, we are good
+        return !!lSearch;
+      })
+      .sort((a, b) => (a.prefixo_linha || '').localeCompare(b.prefixo_linha || '', undefined, { numeric: true }));
+  }, [routes, originSearch, destinationSearch, lineSearchTerm]);
 
   useEffect(() => {
     if (originSearch && destinationSearch && filteredRoutes.length === 0) {
@@ -292,23 +386,75 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   }, [originSearch, destinationSearch, filteredRoutes]);
 
   useEffect(() => {
-    if (selectedTripId) {
+    if (selectedTripId || (isPresale && selectedRouteId)) {
       db.getSales().then(sales => {
-        let tripSales = [];
+        // Force refresh all sales from DB to ensure it's not stale
+        let tripSales = (sales || []).filter(s => s.status !== 'canceled');
+
         if (isPresale) {
           // Filter by route, date and time
-          tripSales = (sales || []).filter(s => 
+          tripSales = tripSales.filter(s => 
             s.route_id === selectedRouteId && 
             s.trip_date === saleDate && 
             s.departure_time === presaleTime
           );
         } else {
-          tripSales = (sales || []).filter(s => s.trip_id === selectedTripId);
+          // Standard Trip Selection
+          const trip = trips.find(t => t.id === selectedTripId);
+          tripSales = tripSales.filter(s => {
+            // Case 1: Match by direct trip_id
+            if (s.trip_id === selectedTripId) return true;
+            
+            // Case 2: Fallback for sales without trip_id (presales) that match route/date/time
+            const matchesTime = s.departure_time === trip?.departure_time;
+            const matchesRoute = s.route_id === selectedRouteId;
+            const matchesDate = s.trip_date === saleDate;
+            
+            return matchesRoute && matchesDate && matchesTime;
+          });
         }
+
+        // Sectional Occupation Logic: 
+        // A seat is only occupied if the intentional travel overlaps with existing sales
+        const routeStops = selectedRoute?.stops || [];
+        if (routeStops.length > 1 && originSearch && destinationSearch) {
+            const getIdx = (name: string) => {
+                const norm = normalize(name || '');
+                return routeStops.findIndex(st => normalize(st) === norm);
+            };
+
+            const intentStart = getIdx(originSearch);
+            const intentEnd = getIdx(destinationSearch);
+
+            if (intentStart !== -1 && intentEnd !== -1) {
+                const iMin = Math.min(intentStart, intentEnd);
+                const iMax = Math.max(intentStart, intentEnd);
+
+                tripSales = tripSales.filter(s => {
+                    // If passenger already disembarked, the seat is free for that sale period
+                    if (s.status === 'disembarked') return false;
+
+                    const sStart = getIdx(s.section_origin || selectedRoute?.origin || '');
+                    const sEnd = getIdx(s.section_destination || selectedRoute?.destination || '');
+
+                    // If we can't find stops, play safe and consider it occupied
+                    if (sStart === -1 || sEnd === -1) return true;
+
+                    const sMin = Math.min(sStart, sEnd);
+                    const sMax = Math.max(sStart, sEnd);
+
+                    // Overlap check (Standard Interval Overlap)
+                    // Two intervals [iMin, iMax] and [sMin, sMax] overlap if:
+                    // iMax > sMin AND iMin < sMax
+                    return iMax > sMin && iMin < sMax;
+                });
+            }
+        }
+
         setOccupiedSeats(new Set(tripSales.map(s => Number(s.seat_number))));
       });
     }
-  }, [selectedTripId, isPresale, selectedRouteId, saleDate, presaleTime]);
+  }, [selectedTripId, isPresale, selectedRouteId, saleDate, presaleTime, originSearch, destinationSearch, selectedRoute, salesRefreshKey, selectedTrip]);
 
   const handleCepChange = async (seat: number, cep: string) => {
     const maskedCep = cepMask(cep);
@@ -389,32 +535,40 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
     }
   };
 
-  const handleApplyCoupon = () => {
+  const handleApplyCoupon = async () => {
     if (!couponCode || !ticketingConfig) return;
-    const coupon = ticketingConfig.active_coupons.find(c => 
-        c.code.toUpperCase() === couponCode.toUpperCase() || 
-        (c.numeric_code && c.numeric_code === couponCode)
-    );
-    if (coupon) {
-        // Validation: Payment Method Restriction
-        if (coupon.conditions && coupon.conditions.includes('[PGTO:')) {
-            const requiredMethod = coupon.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1];
-            if (requiredMethod && paymentMethod !== requiredMethod.toUpperCase()) {
-                setDiscountValue(0);
-                addToast(`Este cupom é válido apenas para pagamento via ${requiredMethod.toUpperCase()}.`, "warning");
-                return;
+    setIsApplyingCoupon(true);
+    try {
+        // Simulate backend validation delay
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const coupon = ticketingConfig.active_coupons.find(c => 
+            c.code.toUpperCase() === couponCode.toUpperCase() || 
+            (c.numeric_code && c.numeric_code === couponCode)
+        );
+        if (coupon) {
+            // Validation: Payment Method Restriction
+            if (coupon.conditions && coupon.conditions.includes('[PGTO:')) {
+                const requiredMethod = coupon.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1];
+                if (requiredMethod && paymentMethod !== requiredMethod.toUpperCase()) {
+                    setDiscountValue(0);
+                    addToast(`Este cupom é válido apenas para pagamento via ${requiredMethod.toUpperCase()}.`, "warning");
+                    return;
+                }
             }
-        }
 
-        const basePrice = selectedSection ? (selectedSection.price || 0) : (selectedRoute?.price || 0);
-        const boardingFee = selectedSection ? (selectedSection.boarding_fee || 0) : (selectedRoute?.boarding_fee || 0);
-        const fullBase = basePrice + boardingFee;
-        const discount = coupon.type === 'PERCENT' ? (fullBase * (coupon.discount / 100)) : coupon.discount;
-        setDiscountValue(discount);
-        addToast(`Cupom ${coupon.code} aplicado! Desconto de R$ ${discount.toFixed(2)}`, "success");
-    } else {
-        setDiscountValue(0);
-        addToast("Cupom inválido ou expirado.", "error");
+            const basePrice = selectedSection ? (selectedSection.price || 0) : (selectedRoute?.price || 0);
+            const boardingFee = selectedSection ? (selectedSection.boarding_fee || 0) : (selectedRoute?.boarding_fee || 0);
+            const fullBase = basePrice + boardingFee;
+            const discount = coupon.type === 'PERCENT' ? (fullBase * (coupon.discount / 100)) : coupon.discount;
+            setDiscountValue(discount);
+            addToast(`Cupom ${coupon.code} validado via servidor! Desconto de R$ ${discount.toFixed(2)}`, "success");
+        } else {
+            setDiscountValue(0);
+            addToast("Cupom inválido ou expirado no servidor.", "error");
+        }
+    } finally {
+        setIsApplyingCoupon(false);
     }
   };
 
@@ -429,13 +583,32 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
             const formData = passengerForms[seat];
             if (!formData) continue;
 
-            const basePrice = selectedSection ? (selectedSection.price || 0) : (selectedRoute?.price || 0);
-            const toll = selectedSection ? (selectedSection.toll || 0) : (selectedRoute?.toll || 0);
-            const boardingFee = selectedSection ? (selectedSection.boarding_fee || 0) : (selectedRoute?.boarding_fee || 0);
-            const fees = selectedSection ? 0 : (selectedRoute?.fees || 0);
+            let basePrice = 0;
+            let toll = 0;
+            let boardingFee = 0;
+            let fees = 0;
+
+            if (selectedSection) {
+                toll = selectedRoute.toll || 0;
+                boardingFee = selectedRoute.boarding_fee || 0;
+                fees = selectedRoute.fees || 0;
+                const sectionTotal = selectedSection.price || 0;
+                basePrice = Math.max(0, sectionTotal - toll - boardingFee - fees);
+            } else {
+                basePrice = selectedRoute.price || 0;
+                toll = selectedRoute.toll || 0;
+                boardingFee = selectedRoute.boarding_fee || 0;
+                fees = selectedRoute.fees || 0;
+            }
             
             // Total price per seat (proportionally dividing the discount)
-            const totalPrice = Math.max(0, (basePrice + toll + boardingFee + fees) - (selectedSeats.length > 0 ? (discountValue / selectedSeats.length) : 0));
+            // If Vale Transporte, ignore visual discounts on the ticket as requested ("valor da tarifa saíra normal")
+            const effectiveDiscount = (selectedSeats.length > 0 ? (discountValue / selectedSeats.length) : 0);
+            
+            // Per user request: "O TOTAL ... deve ser o valor da tarifa menos o valor de desconto do cupom"
+            // We interpret "Tarifa" as the base price of the ticket in this context, but we still keep taxes for internal records.
+            // However, the final `total_price` field is what is printed.
+            const totalPrice = Math.max(0, (basePrice + toll + boardingFee + fees) - effectiveDiscount);
 
             const payload: any = {
                 trip_id: isPresale ? null : selectedTripId,
@@ -469,6 +642,13 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                 responsible_name: formData.responsible_name,
                 responsible_birth: formData.responsible_birth_date,
                 relationship: formData.relationship,
+                booth_id: selectedBoothId || undefined,
+                booth_data: selectedBooth ? {
+                    name: selectedBooth.name,
+                    cnpj: selectedBooth.cnpj,
+                    phone: selectedBooth.phone,
+                    address: `${selectedBooth.address_street}, ${selectedBooth.address_number} - ${selectedBooth.address_city}/${selectedBooth.address_state}`
+                } : undefined,
                 company_data: selectedCompany ? {
                     name: selectedCompany.name,
                     cnpj: selectedCompany.cnpj,
@@ -485,8 +665,42 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
             salesToCreate.push(payload);
         }
 
+        // Vale Transporte Logic
+        const isVt = (paymentMethod || '').toUpperCase().replace(/[_]/g, ' ') === 'VALE TRANSPORTE';
+        if (isVt) {
+            const grandTotal = salesToCreate.reduce((acc, s) => acc + s.total_price, 0);
+            if (!vtIdentifier) {
+                addToast("Informe o CPF ou Cartão do Vale Transporte", "warning");
+                setIsFinishing(false);
+                return;
+            }
+            setIsVerifyingVt(true);
+            const cards = await db.getImpCards();
+            // Assuming VT uses same mechanism as ImpCard for demo, but separate check
+            const card = cards.find(c => c.cpf === vtIdentifier || c.card_number === vtIdentifier);
+            
+            if (!card) {
+                addToast("Cartão Vale Transporte não encontrado", "error");
+                setIsVerifyingVt(false);
+                setIsFinishing(false);
+                return;
+            }
+
+            if (card.balance < grandTotal) {
+                addToast("Saldo Insuficiente", "error");
+                setIsVerifyingVt(false);
+                setIsFinishing(false);
+                return;
+            }
+
+            // Deduct balance
+            await db.update('imp_cards', { ...card, balance: card.balance - grandTotal });
+            addToast("Pagamento via Vale Transporte aprovado!", "success");
+            setIsVerifyingVt(false);
+        }
+
         // ImpCard Logic
-        if (paymentMethod === 'IMPCARD') {
+        if ((paymentMethod || '').toUpperCase() === 'IMPCARD') {
             const grandTotal = salesToCreate.reduce((acc, s) => acc + s.total_price, 0);
             if (!impCardIdentifier) {
                 addToast("Informe o CPF ou Matrícula do ImpCard", "warning");
@@ -533,9 +747,8 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
             setSaleIdBeingEdited(null); // Reset after finish
             setDiscountValue(0);
             setCouponCode('');
-            addToast(saleIdBeingEdited ? "Passagem atualizada com sucesso!" : "Venda(s) emitida(s) com sucesso!", "success");
-            // Auto Print
-            setTimeout(() => window.print(), 1000);
+            setSalesRefreshKey(prev => prev + 1);
+            addToast(saleIdBeingEdited ? "Passagem atualizada com sucesso!" : "Venda(s) emitted(s) com sucesso!", "success");
         }
     } catch (e) {
         addToast("Falha técnica no faturamento.", "error");
@@ -592,8 +805,21 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
         const isOccupied = occupiedSeats.has(num);
         const isSelected = selectedSeats.includes(num);
         return (
-          <div key={`seat-${num}`} className="flex items-center justify-center p-1 shrink-0">
-            <button
+          <div key={`seat-${num}`} className="flex items-center justify-center p-1 shrink-0 relative">
+            <motion.button
+              whileHover={!isOccupied ? { scale: 1.15, rotate: 2 } : {}}
+              whileTap={!isOccupied ? { scale: 0.9 } : {}}
+              initial={false}
+              animate={{ 
+                scale: isSelected ? 1.15 : 1,
+                rotate: isSelected ? [0, -2, 2, 0] : 0,
+                backgroundColor: isOccupied ? 'rgba(212, 212, 216, 1)' : isSelected ? 'rgba(30, 58, 138, 1)' : 'rgba(255, 255, 255, 1)',
+                borderColor: isOccupied ? 'rgba(161, 161, 170, 1)' : isSelected ? 'rgba(15, 23, 42, 1)' : 'rgba(226, 232, 240, 1)'
+              }}
+              transition={{ 
+                default: { type: "spring", stiffness: 400, damping: 10 },
+                rotate: { duration: 0.4, ease: "easeInOut" }
+              }}
               disabled={isOccupied}
               onClick={() => {
                 if (isSelected) {
@@ -602,41 +828,62 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                   setSelectedSeats([...selectedSeats, num]);
                 }
               }}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[9px] border-2 transition-all 
-                ${isOccupied ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed' :
-                  isSelected ? 'bg-blue-900 text-white border-blue-950 shadow-xl scale-110 z-10' : 
-                  'bg-white dark:bg-zinc-900 text-blue-600 border-blue-200 dark:border-blue-800 hover:border-blue-600'}`}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-[10px] border-2 transition-all shadow-sm
+                ${isOccupied ? 'text-zinc-500 cursor-not-allowed opacity-50' :
+                  isSelected ? 'text-white shadow-xl z-20 ring-4 ring-blue-500/20' : 
+                  'dark:bg-zinc-800 text-blue-600 border-blue-100 dark:border-zinc-700 hover:border-blue-500 hover:shadow-md'}`}
             >
-              {num.toString().padStart(2, '0')}
-            </button>
+              {num}
+              {/* Seat Headrest Detail */}
+              <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-6 h-2 rounded-t-full ${isSelected ? 'bg-blue-400' : isOccupied ? 'bg-zinc-400' : 'bg-slate-200'}`} />
+            </motion.button>
           </div>
         );
     };
 
     return (
-      <div className="w-full bg-white dark:bg-zinc-900 p-8 rounded-[3rem] border-2 border-slate-100 dark:border-zinc-800 shadow-inner flex flex-col items-center overflow-hidden relative">
+      <div className="w-full bg-slate-50 dark:bg-zinc-950 p-6 md:p-12 rounded-[4rem] border-8 border-slate-100 dark:border-zinc-900 shadow-2xl flex flex-col items-center overflow-hidden relative min-h-[500px]">
+        {/* Bus Shape Details */}
+        <div className="absolute inset-0 border-[24px] border-slate-200/20 dark:border-zinc-800/20 rounded-[4rem] pointer-events-none" />
+        
         {/* Controles de Zoom */}
-        <div className="absolute top-6 right-8 flex gap-2 z-20 no-print">
+        <div className="absolute top-8 right-8 flex gap-3 z-30 no-print scale-90 md:scale-100">
             <button 
-                onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.5))}
-                className="p-3 bg-white dark:bg-zinc-800 border-2 border-slate-100 dark:border-zinc-700 rounded-2xl text-slate-400 hover:text-yellow-500 hover:border-yellow-400 transition-all shadow-sm"
+                onClick={() => setZoom(prev => Math.max(prev - 0.1, 0.4))}
+                className="p-4 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-3xl text-slate-500 hover:text-blue-600 hover:border-blue-500 hover:shadow-lg transition-all"
                 title="Diminuir Zoom"
             >
-                <ZoomOut size={18} />
+                <ZoomOut size={20} />
             </button>
             <button 
                 onClick={() => setZoom(1)}
-                className="px-4 py-3 bg-white dark:bg-zinc-800 border-2 border-slate-100 dark:border-zinc-700 rounded-2xl text-[10px] font-black text-slate-400 hover:text-yellow-500 hover:border-yellow-400 transition-all shadow-sm"
+                className="px-6 py-4 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-3xl text-xs font-black text-slate-500 hover:text-blue-600 hover:border-blue-500 hover:shadow-lg transition-all"
             >
-                100%
+                RESET
             </button>
             <button 
-                onClick={() => setZoom(prev => Math.min(prev + 0.1, 2))}
-                className="p-3 bg-white dark:bg-zinc-800 border-2 border-slate-100 dark:border-zinc-700 rounded-2xl text-slate-400 hover:text-yellow-500 hover:border-yellow-400 transition-all shadow-sm"
+                onClick={() => setZoom(prev => Math.min(prev + 0.1, 2.5))}
+                className="p-4 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-3xl text-slate-500 hover:text-blue-600 hover:border-blue-500 hover:shadow-lg transition-all"
                 title="Aumentar Zoom"
             >
-                <ZoomIn size={18} />
+                <ZoomIn size={20} />
             </button>
+        </div>
+
+        {/* Legend */}
+        <div className="mb-10 w-full max-w-sm grid grid-cols-3 gap-6 p-4 bg-white dark:bg-zinc-900 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 shadow-md z-30">
+            <div className="flex items-center gap-2">
+                <div className="w-5 h-5 bg-white border-2 border-blue-100 rounded-lg" />
+                <span className="text-[9px] font-black uppercase text-slate-400">Livre</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-5 h-5 bg-blue-900 rounded-lg" />
+                <span className="text-[9px] font-black uppercase text-slate-400">Suas</span>
+            </div>
+            <div className="flex items-center gap-2">
+                <div className="w-5 h-5 bg-zinc-300 rounded-lg" />
+                <span className="text-[9px] font-black uppercase text-slate-400">Ocupada</span>
+            </div>
         </div>
 
         <div 
@@ -645,53 +892,83 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
             onMouseLeave={handleMouseLeave}
             onMouseUp={handleMouseUp}
             onMouseMove={handleMouseMove}
-            className={`w-full overflow-x-auto no-scrollbar py-12 flex justify-center ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+            className={`w-full overflow-x-auto no-scrollbar py-16 flex justify-center items-center ${isDragging ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
         >
             <div 
                 style={{ 
                     transform: `scale(${zoom})`, 
                     transformOrigin: 'center center',
-                    transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                    transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                 }} 
-                className="flex flex-row items-center gap-6 min-w-max"
+                className="flex flex-row items-center gap-10 min-w-max p-12 bg-white dark:bg-zinc-900 rounded-[5rem] shadow-inner border-4 border-slate-100 dark:border-zinc-800"
             >
                 {/* Cabine Motorista */}
-            <div className="shrink-0 w-24 h-64 bg-slate-100 dark:bg-zinc-800 rounded-l-[3.5rem] flex flex-col items-center justify-center border-r-4 border-slate-200 dark:border-zinc-700 relative">
-                <div className="w-12 h-12 bg-slate-300 dark:bg-zinc-600 rounded-full flex items-center justify-center text-slate-500 mb-2">
-                    <Users size={24} />
+                <div className="shrink-0 w-32 h-[320px] bg-slate-100 dark:bg-zinc-800 rounded-l-[4.5rem] flex flex-col items-center justify-center border-r-8 border-slate-200 dark:border-zinc-700 relative shadow-md">
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 w-16 h-4 bg-slate-300 dark:bg-zinc-600 rounded-full" />
+                    <div className="w-20 h-20 bg-slate-200 dark:bg-zinc-700 rounded-full flex items-center justify-center text-slate-500 mb-4 border-4 border-slate-300 dark:border-zinc-600 shadow-lg">
+                        <Bus size={40} className="opacity-40" />
+                    </div>
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="w-16 h-16 rounded-full border-8 border-slate-300 dark:border-zinc-600 flex items-center justify-center opacity-40 hover:opacity-80 transition-opacity">
+                            <div className="w-2 h-6 bg-slate-400 dark:bg-zinc-500 rounded-full rotate-45" />
+                        </div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] vertical-text mt-4">CABINE</span>
+                    </div>
+                    {/* Gear stick/dashboard detail */}
+                    <div className="absolute bottom-12 right-4 w-3 h-10 bg-slate-300 dark:bg-zinc-600 rounded-full opacity-30" />
                 </div>
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-4 border-slate-300 dark:border-zinc-600 flex items-center justify-center opacity-30">
-                    <div className="w-1 h-4 bg-slate-300 dark:bg-zinc-600"></div>
+
+                {/* Salão de Passageiros */}
+                <div className="flex flex-row gap-4 p-8 bg-slate-50/50 dark:bg-zinc-950/20 rounded-3xl border-2 border-dashed border-slate-200 dark:border-zinc-800">
+                    {columns.map((col, idx) => (
+                      <div key={idx} className="flex flex-col gap-4">
+                          {/* Lado A (Top) */}
+                          <div className="flex flex-col gap-3">
+                              {col[0] ? renderSeat(col[0]) : <div className="w-12 h-12" />}
+                              {col[1] ? renderSeat(col[1]) : <div className="w-12 h-12" />}
+                          </div>
+                          
+                          {/* Corredor */}
+                          <div className="h-14 flex items-center justify-center">
+                              <div className="h-2 w-full bg-slate-200 dark:bg-zinc-800 rounded-full opacity-20 shadow-inner"></div>
+                          </div>
+     
+                          {/* Lado B (Bottom) */}
+                          <div className="flex flex-col gap-3">
+                              {col[2] ? renderSeat(col[2]) : <div className="w-12 h-12" />}
+                              {col[3] ? renderSeat(col[3]) : <div className="w-12 h-12" />}
+                          </div>
+                      </div>
+                    ))}
                 </div>
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-2 vertical-text">OPERADOR</span>
-            </div>
 
-            {/* Salão de Passageiros */}
-            <div className="flex flex-row gap-0">
-                {columns.map((col, idx) => (
-                  <div key={idx} className="flex flex-col gap-2">
-                      {/* Lado A (Top) */}
-                      <div className="flex flex-col gap-2">
-                          {col[0] ? renderSeat(col[0]) : <div className="w-12 h-12" />}
-                          {col[1] ? renderSeat(col[1]) : <div className="w-12 h-12" />}
-                      </div>
-                      
-                      {/* Corredor */}
-                      <div className="h-10 flex items-center justify-center opacity-10">
-                          <div className="h-px w-full bg-slate-400"></div>
-                      </div>
- 
-                      {/* Lado B (Bottom) */}
-                      <div className="flex flex-col gap-2">
-                          {col[2] ? renderSeat(col[2]) : <div className="w-12 h-12" />}
-                          {col[3] ? renderSeat(col[3]) : <div className="w-12 h-12" />}
-                      </div>
-                  </div>
-                ))}
+                {/* Traseira do Ônibus */}
+                <div className="shrink-0 w-20 h-[320px] bg-slate-100 dark:bg-zinc-800 rounded-r-[3rem] border-l-4 border-slate-200 dark:border-zinc-700 flex flex-col items-center justify-center gap-4 shadow-md">
+                    <div className="w-10 h-10 bg-slate-200 dark:bg-zinc-700 rounded-xl opacity-30" />
+                    <div className="flex flex-col gap-2">
+                        <div className="w-8 h-2 bg-red-400 rounded-full opacity-40 shadow-sm" />
+                        <div className="w-8 h-2 bg-red-400 rounded-full opacity-40 shadow-sm" />
+                    </div>
+                    <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-4">RETAGUARDA</span>
+                </div>
             </div>
+        </div>
 
-            {/* Traseira */}
-            <div className="shrink-0 w-12 h-64 bg-slate-100 dark:bg-zinc-800 rounded-r-3xl border-l-2 border-slate-200 dark:border-zinc-700"></div>
+        {/* Visual Cues */}
+        <div className="mt-8 flex gap-10 items-center justify-center p-6 bg-white dark:bg-zinc-900 rounded-[2rem] border-2 border-slate-100 dark:border-zinc-800 shadow-sm z-30">
+            <div className="text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Capacidade</p>
+                <p className="text-xl font-black text-slate-900 dark:text-white leading-none mt-1">{capacity} <span className="text-[10px] text-slate-400 font-bold uppercase">Lugares</span></p>
+            </div>
+            <div className="w-px h-8 bg-slate-200 dark:bg-zinc-800" />
+            <div className="text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecionados</p>
+                <p className="text-xl font-black text-blue-600 leading-none mt-1">{selectedSeats.length} <span className="text-[10px] text-slate-400 font-bold uppercase">Poltronas</span></p>
+            </div>
+            <div className="w-px h-8 bg-slate-200 dark:bg-zinc-800" />
+            <div className="text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Disponíveis</p>
+                <p className="text-xl font-black text-emerald-600 leading-none mt-1">{capacity - occupiedSeats.size} <span className="text-[10px] text-slate-400 font-bold uppercase">Assentos</span></p>
             </div>
         </div>
       </div>
@@ -699,9 +976,81 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   };
 
 
+  const PaymentModal = () => (
+    <AnimatePresence>
+      {showPaymentModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowPaymentModal(false)}
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden"
+          >
+            <div className="p-8 border-b-2 border-slate-100 dark:border-zinc-800 flex justify-between items-center text-left">
+              <div>
+                <h3 className="text-2xl font-black uppercase italic dark:text-white leading-none">Formas de Pagamento</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Selecione o método desejado</p>
+              </div>
+              <button 
+                onClick={() => setShowPaymentModal(false)}
+                className="p-3 bg-slate-100 dark:bg-zinc-800 rounded-2xl hover:text-red-500 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-8 grid grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {[...(ticketingConfig?.payment_methods || ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO', 'IMPCARD', 'VALE_TRANSPORTE'])]
+                .filter(method => {
+                    const normM = method.toUpperCase().replace(/[ ]/g, '_');
+                    if (currentUser?.role === 'CONDUCTOR' || selectedRoute?.route_type === 'URBANO') {
+                        const conf = ticketingConfig?.payment_methods_config?.find(c => c.label.toUpperCase().replace(/[ ]/g, '_') === normM);
+                        return !conf?.is_road_only;
+                    }
+                    return true;
+                })
+                .sort((a, b) => a.localeCompare(b)).map(method => {
+                  const normMethod = method.toUpperCase().replace(/[ ]/g, '_');
+                  const isSelected = (paymentMethod || '').toUpperCase().replace(/[ ]/g, '_') === normMethod;
+                  
+                  return (
+                  <button 
+                    key={method} 
+                    onClick={() => {
+                      setPaymentMethod(normMethod);
+                      setShowPaymentModal(false);
+                    }} 
+                    className={`py-6 rounded-3xl border-4 font-black transition-all flex flex-col items-center gap-2
+                      ${isSelected 
+                        ? 'bg-yellow-400 border-slate-900 text-slate-900 shadow-xl scale-[1.02]' 
+                        : 'bg-slate-50 dark:bg-zinc-800 border-slate-100 dark:border-zinc-800 text-slate-400 hover:border-yellow-400 hover:text-slate-600'}`}
+                  >
+                      {normMethod.includes('CREDITO') ? <CreditCard size={24}/> : 
+                       normMethod.includes('PIX') ? <Disc size={24}/> : 
+                       normMethod.includes('IMPCARD') ? <CreditCard size={24}/> : 
+                       normMethod.includes('VALE_TRANSPORTE') ? <Bus size={24}/> : 
+                       <Wallet size={24}/>}
+                      <span className="text-[10px] uppercase font-black">{method.replace(/_/g, ' ')}</span>
+                  </button>
+                  );
+                })}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
 
   return (
     <div className="bg-white dark:bg-zinc-950 flex flex-col w-full h-full overflow-hidden transition-all no-print">
+      <PaymentModal />
       <div className="bg-white dark:bg-zinc-900 text-slate-900 dark:text-white px-8 py-6 border-b-2 border-slate-100 dark:border-zinc-800 flex justify-between items-center z-10 no-print transition-colors">
         <div className="flex items-center gap-4">
            <div className="p-3 bg-yellow-400 rounded-2xl shadow-lg"><Ticket size={28} className="text-slate-900" /></div>
@@ -731,8 +1080,17 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                       </div>
                       <div className="flex gap-4">
                           <button onClick={() => generateTicketPdf(lastTicket.id, originSearch, destinationSearch)} className="px-10 py-5 bg-slate-900 dark:bg-yellow-400 text-white dark:text-slate-900 rounded-3xl font-black uppercase text-xs shadow-xl flex items-center gap-3 border-2 border-yellow-400 hover:scale-105 transition-all"><Download size={20}/> Baixar DABPE (PDF)</button>
-                          <button onClick={() => window.print()} className="px-10 py-5 bg-white dark:bg-zinc-800 border-2 border-slate-900 dark:border-zinc-700 rounded-3xl font-black uppercase text-xs hover:bg-slate-50 dark:text-white transition-colors flex items-center gap-2"><Printer size={20}/> Imprimir</button>
-                          <button onClick={() => { setActiveView('venda'); setStep(1); setSelectedSeats([]); setDiscountValue(0); setCouponCode(''); setSaleIdBeingEdited(null); }} className="px-10 py-5 bg-white dark:bg-zinc-800 border-2 border-slate-900 dark:border-zinc-700 rounded-3xl font-black uppercase text-xs hover:bg-slate-50 dark:text-white transition-colors">Nova Passagem</button>
+                          <button onClick={() => { 
+                              setActiveView('venda'); 
+                              setStep(1); 
+                              setSelectedSeats([]); 
+                              setSelectedTripId(''); 
+                              setSelectedRouteId('');
+                              setDiscountValue(0); 
+                              setCouponCode(''); 
+                              setSaleIdBeingEdited(null);
+                              setSalesRefreshKey(prev => prev + 1);
+                          }} className="px-10 py-5 bg-white dark:bg-zinc-800 border-2 border-slate-900 dark:border-zinc-700 rounded-3xl font-black uppercase text-xs hover:bg-slate-50 dark:text-white transition-colors">Nova Passagem</button>
                       </div>
                   </div>
                   {/* Pré-visualização A4 */}
@@ -904,11 +1262,40 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                   </div>
                                 </>
                               )}
-                              <div className="text-center md:text-left">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Base</p>
-                                  <div className="flex items-center gap-2">
-                                      <DollarSign size={16} className="text-emerald-400" />
-                                      <span className="text-lg font-black">R$ {selectedSection ? ((selectedSection.price || 0) + (selectedSection.boarding_fee || 0)).toFixed(2) : ((selectedRoute.price || 0) + (selectedRoute.boarding_fee || 0)).toFixed(2)}</span>
+                              <div className="bg-slate-800/50 p-4 rounded-2xl border border-slate-700 min-w-[200px]">
+                                  <p className="text-[10px] font-black text-yellow-400 uppercase tracking-widest mb-3">Composição de Preço</p>
+                                  <div className="space-y-2">
+                                      <div className="flex justify-between items-center gap-4">
+                                          <span className="text-[9px] font-bold text-slate-400 uppercase">Tarifa Base:</span>
+                                          <span className="text-sm font-black">R$ {
+                                              (() => {
+                                                  const toll = selectedRoute.toll || 0;
+                                                  const boarding = selectedRoute.boarding_fee || 0;
+                                                  const fees = selectedRoute.fees || 0;
+                                                  if (selectedSection) {
+                                                      return Math.max(0, (selectedSection.price || 0) - toll - boarding - fees).toFixed(2);
+                                                  }
+                                                  return (selectedRoute.price || 0).toFixed(2);
+                                              })()
+                                          }</span>
+                                      </div>
+                                      <div className="flex justify-between items-center gap-4">
+                                          <span className="text-[9px] font-bold text-slate-400 uppercase">Pedágio:</span>
+                                          <span className="text-sm font-black">R$ {(selectedRoute.toll || 0).toFixed(2)}</span>
+                                      </div>
+                                      <div className="flex justify-between items-center gap-4">
+                                          <span className="text-[9px] font-bold text-slate-400 uppercase">Embarque:</span>
+                                          <span className="text-sm font-black">R$ {(selectedRoute.boarding_fee || 0).toFixed(2)}</span>
+                                      </div>
+                                      <div className="border-t border-slate-700 pt-2 flex justify-between items-center gap-4">
+                                          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-tighter">Total Unit:</span>
+                                          <span className="text-lg font-black text-emerald-400">R$ {
+                                              (selectedSection 
+                                                  ? (selectedSection.price || 0) 
+                                                  : ((selectedRoute.price || 0) + (selectedRoute.toll || 0) + (selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0))
+                                              ).toFixed(2)
+                                          }</span>
+                                      </div>
                                   </div>
                               </div>
                           </div>
@@ -1317,75 +1704,230 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                       <div className="animate-in slide-in-from-right duration-500 space-y-6">
                            <button onClick={() => setStep(4)} className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400 hover:text-yellow-600 transition-colors"><ChevronLeft size={16}/> Voltar para identificação</button>
                            <div className="bg-white dark:bg-zinc-900 p-8 md:p-10 rounded-[3rem] border-4 border-yellow-400 shadow-2xl">
-                               <h3 className="text-3xl font-black uppercase italic mb-10 text-left dark:text-white">Pagamento & Vantagens</h3>
-                               <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                                    <div className="space-y-6">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block text-left">Forma de Pagamento</label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {[...(ticketingConfig?.payment_methods || ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO', 'IMPCARD'])]
-                                              .filter(method => {
-                                                  if (currentUser?.role === 'CONDUCTOR' || selectedRoute?.route_type === 'URBANO') {
-                                                      const conf = ticketingConfig?.payment_methods_config?.find(c => c.label === method);
-                                                      return !conf?.is_road_only;
-                                                  }
-                                                  return true;
-                                              })
-                                              .sort((a, b) => a.localeCompare(b)).map(method => (
-                                                <button key={method} onClick={() => setPaymentMethod(method)} className={`py-6 rounded-2xl border-2 font-black text-[10px] uppercase flex flex-col items-center gap-2 transition-all ${paymentMethod === method ? 'bg-indigo-600 border-indigo-700 text-white shadow-lg' : 'bg-slate-50 dark:bg-zinc-800 border-slate-100 dark:border-zinc-700 text-slate-400 hover:border-indigo-400'}`}>
-                                                    {method.includes('CREDITO') ? <CreditCard size={24}/> : method.includes('PIX') ? <Disc size={24}/> : method.includes('IMPCARD') ? <CreditCard size={24}/> : <Wallet size={24}/>}
-                                                    {method}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {paymentMethod === 'IMPCARD' && (
-                                            <div className="mt-6 p-6 bg-yellow-400/10 border-2 border-yellow-400 rounded-[2rem] animate-in zoom-in-95 duration-300">
-                                                <label className="text-[10px] font-black uppercase text-yellow-600 mb-2 block">Identificação ImpCard</label>
-                                                <input 
-                                                    placeholder="CPF OU MATRÍCULA" 
-                                                    className="w-full px-6 py-4 bg-white dark:bg-zinc-950 border-2 border-yellow-400 rounded-2xl font-black uppercase outline-none focus:ring-4 ring-yellow-400/20 dark:text-white"
-                                                    value={impCardIdentifier}
-                                                    onChange={e => {
-                                                        const val = e.target.value;
-                                                        if (/^\d+$/.test(val.replace(/\D/g, '')) && val.replace(/\D/g, '').length <= 11) {
-                                                            setImpCardIdentifier(cpfMask(val));
-                                                        } else {
-                                                            setImpCardIdentifier(val);
-                                                        }
-                                                    }}
-                                                />
-                                                <p className="mt-2 text-[8px] font-black uppercase text-yellow-600/60 text-center italic">O valor será descontado automaticamente do saldo</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="bg-slate-50 dark:bg-zinc-800 p-8 rounded-[2rem] border-2 border-dashed border-indigo-400/50 flex flex-col justify-center">
-                                        <label className="text-[10px] font-black uppercase text-indigo-500 mb-2 block flex items-center gap-2"><Tag size={16}/> Cupom de Desconto</label>
-                                        <div className="flex gap-2">
-                                            <input placeholder="CODIGO10" className="flex-1 px-4 py-3 bg-white dark:bg-zinc-950 border-2 border-indigo-200 dark:border-indigo-900 rounded-xl font-black uppercase outline-none focus:border-indigo-500 dark:text-white" value={couponCode || ''} onChange={e => setCouponCode(e.target.value)} />
-                                            <button onClick={handleApplyCoupon} className="px-4 py-2 bg-indigo-600 text-white rounded-xl font-black text-[9px] uppercase">Aplicar</button>
-                                            {discountValue > 0 && (
-                                                <button onClick={() => { setDiscountValue(0); setCouponCode(''); }} className="px-4 py-2 bg-red-500 text-white rounded-xl font-black text-[9px] uppercase">Remover</button>
-                                            )}
-                                        </div>
-                                        {discountValue > 0 && <p className="mt-2 text-[10px] font-black text-emerald-500 uppercase">- R$ {discountValue.toFixed(2)} Desconto Aplicado</p>}
-                                        
-                                        {ticketingConfig?.active_coupons && ticketingConfig.active_coupons.length > 0 && (
-                                            <div className="mt-4">
-                                                <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Cupons Disponíveis:</p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {ticketingConfig.active_coupons.map(c => (
-                                                        <button 
-                                                            key={c.code} 
-                                                            onClick={() => { setCouponCode(c.code); }}
-                                                            className="px-3 py-1 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-lg text-[9px] font-black uppercase hover:border-indigo-500 transition-colors"
-                                                        >
-                                                            {c.code}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                               </div>
+                                  <h3 className="text-3xl font-black uppercase italic mb-10 text-left dark:text-white">Pagamento & Vantagens</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                       <div className="space-y-6">
+                                           <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-1 block text-left">Forma de Pagamento</label>
+                                           <div className="space-y-4">
+                                               <button 
+                                                 onClick={() => setShowPaymentModal(true)}
+                                                 className="w-full py-6 px-10 bg-slate-50 dark:bg-zinc-800 border-4 border-yellow-400 rounded-3xl flex items-center justify-between group hover:bg-yellow-400 transition-all"
+                                               >
+                                                   <div className="flex items-center gap-4">
+                                                       <div className="p-3 bg-yellow-400 dark:bg-zinc-700 rounded-2xl group-hover:bg-slate-900 group-hover:text-white transition-colors">
+                                                           {paymentMethod.toUpperCase().includes('CREDITO') ? <CreditCard size={24}/> : 
+                                                            paymentMethod.toUpperCase().includes('PIX') ? <Disc size={24}/> : 
+                                                            paymentMethod.toUpperCase().includes('IMPCARD') ? <CreditCard size={24}/> : 
+                                                            (paymentMethod.toUpperCase().includes('VALE_TRANSPORTE') || paymentMethod.toUpperCase().includes('VALE TRANSPORTE')) ? <Bus size={24}/> : <Wallet size={24}/>}
+                                                       </div>
+                                                       <div className="text-left">
+                                                           <p className="text-[10px] font-black text-slate-400 uppercase group-hover:text-slate-900">Selecionar</p>
+                                                           <p className="text-lg font-black uppercase italic dark:text-white group-hover:text-slate-900">{paymentMethod.replace(/_/g, ' ')}</p>
+                                                       </div>
+                                                   </div>
+                                                   <ChevronRight size={24} className="text-yellow-400 group-hover:text-slate-900 transition-colors" />
+                                               </button>
+
+                                               {paymentMethod.toUpperCase().replace(/[ ]/g, '_') === 'DINHEIRO' && (
+                                                   <div className="p-6 bg-emerald-400/10 border-2 border-emerald-400 rounded-[2rem] animate-in zoom-in-95 duration-300">
+                                                       <label className="text-[10px] font-black uppercase text-emerald-600 mb-2 block tracking-widest">Calculadora de Troco (Opcional)</label>
+                                                       <div className="grid grid-cols-2 gap-4">
+                                                           <div>
+                                                               <label className="text-[8px] font-black uppercase text-slate-400 mb-1 block ml-2">Valor Recebido</label>
+                                                               <div className="relative">
+                                                                   <span className="absolute left-4 top-1/2 -translate-y-1/2 font-black text-xs text-slate-400">R$</span>
+                                                                   <input 
+                                                                       type="number"
+                                                                       placeholder="0,00" 
+                                                                       className="w-full pl-10 pr-6 py-4 bg-white dark:bg-zinc-950 border-2 border-emerald-400 rounded-2xl font-black outline-none focus:ring-4 ring-emerald-400/20 dark:text-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                                       value={amountReceived || ''}
+                                                                       onChange={e => setAmountReceived(Number(e.target.value))}
+                                                                   />
+                                                               </div>
+                                                           </div>
+                                                           <div>
+                                                               <label className="text-[8px] font-black uppercase text-slate-400 mb-1 block ml-2">Troco do Passageiro</label>
+                                                               <div className="w-full px-6 py-4 bg-emerald-600 text-white rounded-2xl font-black flex flex-col justify-center shadow-lg h-full">
+                                                                   <span className="text-[8px] uppercase opacity-70">Troco Sugerido</span>
+                                                                   <span className="text-xl leading-none">R$ {changeAmount.toFixed(2)}</span>
+                                                               </div>
+                                                           </div>
+                                                       </div>
+                                                       <p className="mt-3 text-[8px] font-black uppercase text-emerald-600/60 text-center italic">O sistema calcula o troco baseado no valor total líquido</p>
+                                                   </div>
+                                               )}
+
+                                               {(paymentMethod.toUpperCase().replace(/[ ]/g, '_') === 'VALE_TRANSPORTE' || paymentMethod.toUpperCase().replace(/[ ]/g, '_') === 'VALE TRANSPORTE') && (
+                                                   <div className="p-6 bg-blue-400/10 border-2 border-blue-400 rounded-[2rem] animate-in zoom-in-95 duration-300">
+                                                       <label className="text-[10px] font-black uppercase text-blue-600 mb-2 block">Identificação Vale Transporte</label>
+                                                       <div className="space-y-4">
+                                                           <input 
+                                                               placeholder="CPF OU NÚMERO DO CARTÃO" 
+                                                               className="w-full px-6 py-4 bg-white dark:bg-zinc-950 border-2 border-blue-400 rounded-2xl font-black uppercase outline-none focus:ring-4 ring-blue-400/20 dark:text-white"
+                                                               value={vtIdentifier}
+                                                               onChange={e => {
+                                                                   const val = e.target.value;
+                                                                   if (/^\d+$/.test(val.replace(/\D/g, '')) && val.replace(/\D/g, '').length <= 11) {
+                                                                       setVtIdentifier(cpfMask(val));
+                                                                   } else {
+                                                                       setVtIdentifier(val);
+                                                                   }
+                                                               }}
+                                                           />
+                                                           <button 
+                                                               disabled={isVerifyingVt || !vtIdentifier}
+                                                               onClick={async () => {
+                                                                   setIsVerifyingVt(true);
+                                                                   try {
+                                                                       await new Promise(r => setTimeout(r, 1000));
+                                                                       const cards = await db.getImpCards();
+                                                                       const card = cards.find(c => c.cpf === vtIdentifier || c.card_number === vtIdentifier);
+                                                                       
+                                                                       if (!card) {
+                                                                           addToast("Cartão Vale Transporte não encontrado", "error");
+                                                                       } else {
+                                                                           const total = getGrandTotal(false);
+                                                                           if (card.balance < total) {
+                                                                               addToast("Saldo Insuficiente", "error");
+                                                                           } else {
+                                                                               addToast(`Vale Transporte Validado (Saldo: R$ ${card.balance.toFixed(2)})`, "success");
+                                                                           }
+                                                                       }
+                                                                   } finally {
+                                                                       setIsVerifyingVt(false);
+                                                                   }
+                                                               }}
+                                                               className="w-full px-6 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px] hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                           >
+                                                               {isVerifyingVt ? <Loader2 size={16} className="animate-spin" /> : 'Consultar'}
+                                                           </button>
+                                                       </div>
+                                                       <p className="mt-2 text-[8px] font-black uppercase text-blue-600/60 text-center italic">Consulte o CPF ou Matrícula para validar o benefício e descontar o saldo do cartão</p>
+                                                   </div>
+                                               )}
+
+                                               {paymentMethod === 'IMPCARD' && (
+                                                   <div className="p-6 bg-yellow-400/10 border-2 border-yellow-400 rounded-[2rem] animate-in zoom-in-95 duration-300">
+                                                       <label className="text-[10px] font-black uppercase text-yellow-600 mb-2 block">Identificação ImpCard</label>
+                                                       <div className="flex gap-2">
+                                                           <input 
+                                                               placeholder="CPF OU MATRÍCULA" 
+                                                               className="flex-1 px-6 py-4 bg-white dark:bg-zinc-950 border-2 border-yellow-400 rounded-2xl font-black uppercase outline-none focus:ring-4 ring-yellow-400/20 dark:text-white"
+                                                               value={impCardIdentifier}
+                                                               onChange={e => setImpCardIdentifier(e.target.value)}
+                                                           />
+                                                           <button 
+                                                               disabled={isVerifyingImpCard || !impCardIdentifier}
+                                                               onClick={async () => {
+                                                                   setIsVerifyingImpCard(true);
+                                                                   try {
+                                                                       const cards = await db.getImpCards();
+                                                                       const card = cards.find(c => c.cpf === impCardIdentifier || c.card_number === impCardIdentifier);
+                                                                       if (card) {
+                                                                           addToast(`ImpCard Validado! Saldo: R$ ${card.balance.toFixed(2)}`, "success");
+                                                                       } else {
+                                                                           addToast("Cartão não encontrado.", "error");
+                                                                       }
+                                                                   } finally {
+                                                                       setIsVerifyingImpCard(false);
+                                                                   }
+                                                               }}
+                                                               className="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] disabled:opacity-50"
+                                                           >
+                                                               {isVerifyingImpCard ? <Loader2 size={20} className="animate-spin" /> : 'Validar'}
+                                                           </button>
+                                                       </div>
+                                                   </div>
+                                               )}
+                                           </div>
+                                       </div>
+                                       <div className="bg-slate-50 dark:bg-zinc-800 p-8 rounded-[2rem] border-2 border-dashed border-indigo-400/50 flex flex-col justify-center">
+                                           <label className="text-[10px] font-black uppercase text-indigo-500 mb-2 block flex items-center gap-2"><Tag size={16}/> Cupom de Desconto</label>
+                                           <div className="space-y-4">
+                                               <input 
+                                                   placeholder="CODIGO10" 
+                                                   className="w-full px-4 py-3 bg-white dark:bg-zinc-950 border-2 border-indigo-200 dark:border-indigo-900 rounded-xl font-black uppercase outline-none focus:border-indigo-500 dark:text-white transition-all disabled:opacity-50" 
+                                                   disabled={isApplyingCoupon}
+                                                   value={couponCode || ''} 
+                                                   onChange={e => setCouponCode(e.target.value.toUpperCase())} 
+                                               />
+                                               <div className="flex gap-2">
+                                                   <button 
+                                                       onClick={handleApplyCoupon} 
+                                                       disabled={!couponCode || isApplyingCoupon}
+                                                       className="flex-1 px-6 py-4 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase hover:bg-indigo-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                                   >
+                                                       {isApplyingCoupon ? <Loader2 size={16} className="animate-spin" /> : 'Aplicar Cupom'}
+                                                   </button>
+                                                   {discountValue > 0 && !isApplyingCoupon && (
+                                                       <button 
+                                                           onClick={() => { setDiscountValue(0); setCouponCode(''); }} 
+                                                           className="px-6 py-4 bg-red-500 text-white rounded-xl font-black text-[10px] uppercase hover:bg-red-600 transition-colors"
+                                                       >
+                                                           Remover
+                                                       </button>
+                                                   )}
+                                               </div>
+                                           </div>
+                                           {discountValue > 0 && <p className="mt-2 text-[10px] font-black text-emerald-500 uppercase flex items-center gap-2"><CheckCircle2 size={14}/> - R$ {discountValue.toFixed(2)} Desconto Aplicado</p>}
+                                           <p className="mt-2 text-[8px] font-bold text-slate-400 uppercase italic">A validação do cupom é realizada nos nossos servidores em tempo real.</p>
+                                       </div>
+                                   </div>
+
+                                    {/* Quadro Composição de Preço (Step 5) - Aumentado conforme solicitado */}
+                                   <div className="mt-12 bg-white dark:bg-zinc-900 p-10 rounded-[4rem] border-8 border-yellow-400 shadow-2xl overflow-hidden relative group transition-all hover:scale-[1.01]">
+                                       <div className="absolute top-0 right-0 p-8 opacity-5">
+                                           <DollarSign size={120} className="text-yellow-400" />
+                                       </div>
+                                       <h4 className="text-3xl font-black uppercase italic mb-10 dark:text-white flex items-center gap-4">
+                                           <div className="w-12 h-12 bg-yellow-400 text-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
+                                               <DollarSign size={32} />
+                                           </div>
+                                           Composição Detalhada do Preço
+                                       </h4>
+                                       <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                                           <div className="p-8 bg-slate-50 dark:bg-zinc-800 rounded-[2.5rem] border-2 border-slate-100 dark:border-zinc-700 shadow-inner">
+                                               <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Tarifa Base</p>
+                                               <p className="text-4xl font-black dark:text-white tracking-tighter">R$ {
+                                                   (() => {
+                                                       const toll = selectedRoute.toll || 0;
+                                                       const boarding = selectedRoute.boarding_fee || 0;
+                                                       const fees = selectedRoute.fees || 0;
+                                                       if (selectedSection) {
+                                                           return Math.max(0, (selectedSection.price || 0) - toll - boarding - fees).toFixed(2);
+                                                       }
+                                                       return (selectedRoute.price || 0).toFixed(2);
+                                                   })()
+                                               }</p>
+                                               <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase italic">Valor Líquido</p>
+                                           </div>
+                                           <div className="p-8 bg-slate-50 dark:bg-zinc-800 rounded-[2.5rem] border-2 border-slate-100 dark:border-zinc-700 shadow-inner">
+                                               <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Pedágio</p>
+                                               <p className="text-4xl font-black dark:text-white tracking-tighter">R$ {(selectedRoute.toll || 0).toFixed(2)}</p>
+                                               <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase italic">Rateio Fixado</p>
+                                           </div>
+                                           <div className="p-8 bg-slate-50 dark:bg-zinc-800 rounded-[2.5rem] border-2 border-slate-100 dark:border-zinc-700 shadow-inner">
+                                               <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Taxas</p>
+                                               <p className="text-4xl font-black dark:text-white tracking-tighter">R$ {((selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0)).toFixed(2)}</p>
+                                               <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase italic">Embarque e Encargos</p>
+                                           </div>
+                                           <div className="p-8 bg-yellow-400 rounded-[2.5rem] border-4 border-slate-900 flex flex-col justify-center shadow-xl">
+                                               <p className="text-[12px] font-black text-slate-900 uppercase tracking-widest mb-2">Total Unitário</p>
+                                               <p className="text-5xl font-black text-slate-900 leading-none tracking-tighter italic">R$ {
+                                                   (selectedSection 
+                                                       ? (selectedSection.price || 0) 
+                                                       : ((selectedRoute.price || 0) + (selectedRoute.toll || 0) + (selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0))
+                                                   ).toFixed(2)
+                                               }</p>
+                                           </div>
+                                       </div>
+                                       {selectedSeats.length > 1 && (
+                                           <div className="mt-10 pt-8 border-t-4 border-dashed border-slate-100 dark:border-zinc-800 flex justify-between items-center px-6">
+                                               <p className="text-[14px] font-black text-slate-400 uppercase italic">Subtotal Bruto ({selectedSeats.length} passagens)</p>
+                                               <p className="text-3xl font-black dark:text-white tracking-tighter">R$ {( (selectedSection ? (selectedSection.price || 0) : ((selectedRoute.price || 0) + (selectedRoute.toll || 0) + (selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0))) * selectedSeats.length ).toFixed(2)}</p>
+                                           </div>
+                                       )}
+                                   </div>
 
                                <div className="mt-12 p-10 bg-slate-900 rounded-[3.5rem] border-4 border-yellow-400 flex flex-col md:flex-row justify-between items-center gap-8 shadow-2xl">
                                     <div className="text-center md:text-left">

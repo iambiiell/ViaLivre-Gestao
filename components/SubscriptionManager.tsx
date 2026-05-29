@@ -79,8 +79,27 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
         db.getAllActivationKeys(),
         db.getAllUsers()
       ]);
-      setKeys(keysData || []);
-      setAllUsers(usersData || []);
+      
+      const kData = keysData || [];
+      const uData = usersData || [];
+      
+      setKeys(kData);
+      setAllUsers(uData);
+
+      // Seed sample data if keys are empty
+      if (kData.length === 0 && !isLoading) {
+         const sampleKey: Partial<ActivationKey> = {
+          key_code: 'MASTER-2024-TEST-KEY',
+          plan_type: 'ANNUAL',
+          price: 1799.00,
+          duration_months: 12,
+          is_used: false,
+          created_at: new Date().toISOString()
+        };
+        await db.create<ActivationKey>('activation_keys', sampleKey);
+        const updatedKeys = await db.getAllActivationKeys();
+        setKeys(updatedKeys);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       addToast('Erro ao carregar dados', 'error');
@@ -101,7 +120,7 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
         created_at: new Date().toISOString()
       };
 
-      await db.create('activation_keys', newKey);
+      await db.create<ActivationKey>('activation_keys', newKey);
       addToast('Chave de ativação gerada com sucesso!', 'success');
       fetchData();
     } catch (error) {

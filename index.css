@@ -1,23 +1,29 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
 
 @layer base {
   html {
     font-size: 19.2px; /* 1.2rem base */
   }
   body { 
-    font-family: 'Inter', sans-serif;
+    font-family: var(--font-sans);
     @apply antialiased bg-white dark:bg-zinc-950 text-slate-900 dark:text-slate-100 overflow-x-hidden transition-colors duration-500;
   }
   
   input, select, textarea {
-    @apply transition-all duration-300 border-2 border-[#facc15] outline-none rounded-xl px-4 py-3 bg-white dark:bg-zinc-900 text-slate-900 dark:text-slate-100;
+    @apply transition-all duration-300 border-2 border-yellow-400 outline-none rounded-xl px-4 py-3 bg-white dark:bg-zinc-900 text-slate-900 dark:text-slate-100;
   }
 
   input:focus, select:focus, textarea:focus {
-    @apply border-[#4f46e5];
+    @apply border-indigo-600;
+  }
+
+  button {
+    @apply transition-all duration-300 active:scale-95 cursor-pointer disabled:cursor-not-allowed hover:brightness-110;
   }
 
   .border-red-500 {

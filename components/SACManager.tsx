@@ -21,8 +21,6 @@ const SACManager: React.FC<SACManagerProps> = ({ addToast }) => {
   const [selectedCard, setSelectedCard] = useState<ImpCard | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
 
   // Recharge state
   const [rechargeQuery, setRechargeQuery] = useState('');
@@ -120,61 +118,6 @@ const SACManager: React.FC<SACManagerProps> = ({ addToast }) => {
       addToast("Erro ao salvar cadastro.", "error");
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const generateAIArt = async (card: ImpCard) => {
-    setIsGenerating(true);
-    setGeneratedImageUrl(null);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      
-      const prompt = `Crie uma imagem fotorrealista de um cartão de transporte inteligente brasileiro (cartão VT - Vale Transporte), em formato retangular com cantos arredondados, em um fundo branco limpo. O cartão deve ser dividido em cores, com uma seção superior amarela brilhante e uma seção inferior azul marinho profunda.
- 
- Layout da Seção Superior (Amarela):
- No topo, alinhado ao centro, o texto "VALE TRANSPORTE" em fonte branca sans-serif arrojada.
- 
- Layout da Seção Inferior (Azul Marinho):
- Canto Superior Esquerdo: Um chip de cartão inteligente metálico realista com o símbolo de pagamento sem contato (ondas) à direita.
- Abaixo do Chip: Um logo estilizado em amarelo e branco que diz "VT VALE TRANSPORTE" com o ícone de um ônibus.
- Canto Superior Direito: Uma foto de perfil circular da usuária (${card.name} ${card.surname}), em um círculo branco com borda amarela.
- Ao lado da Foto: O texto em branco "${card.name} ${card.surname}", abaixo "Nº DO CARTÃO:", e o número "${card.card_number}".
- Abaixo da Foto: Um campo retangular amarelo com o texto em azul "VALIDADE: 12/2026" e "CATEGORIA: ${card.type === 'Vale Transporte' ? 'COMUM' : card.type.toUpperCase()}".
- Canto Inferior Direito: Um código QR preto e branco e o símbolo de pagamento sem contato (ondas) em amarelo acima dele.
- 
- Barra Inferior Amarela: Uma barra amarela sólida na parte inferior do cartão que se estende por toda a largura. Sem logotipos adicionais.
- 
- A imagem deve ser de alta qualidade, nítida e bem iluminada, mostrando os detalhes do cartão e seus elementos.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: prompt }] },
-        config: { imageConfig: { aspectRatio: "4:3" } }
-      });
-
-      let artUrl = '';
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          artUrl = `data:image/png;base64,${part.inlineData.data}`;
-          setGeneratedImageUrl(artUrl);
-          break;
-        }
-      }
-
-      if (artUrl && card.id) {
-        const updatedCard = { ...card, ai_art_url: artUrl };
-        await db.update('imp_cards', updatedCard);
-        setSelectedCard(updatedCard);
-        addToast("Arte gerada e salva com sucesso!");
-      } else if (artUrl) {
-        setFormData(prev => ({ ...prev, ai_art_url: artUrl }));
-        addToast("Arte gerada com sucesso!");
-      }
-    } catch (error) {
-      console.error("Erro ao gerar arte:", error);
-      addToast("Erro ao gerar arte com IA.", "error");
-    } finally {
-      setIsGenerating(false);
     }
   };
 
@@ -281,7 +224,7 @@ const SACManager: React.FC<SACManagerProps> = ({ addToast }) => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">SAC - ImpCard</h2>
+          <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Vale Transporte</h2>
           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Atendimento ao Cliente e Gestão de Benefícios</p>
         </div>
         <div className="flex bg-slate-100 dark:bg-zinc-900 p-1.5 rounded-2xl border border-slate-200 dark:border-zinc-800">
@@ -367,7 +310,6 @@ const SACManager: React.FC<SACManagerProps> = ({ addToast }) => {
                             e.stopPropagation();
                             setSelectedCard(card);
                             setIsPreviewOpen(true);
-                            setGeneratedImageUrl(null);
                           }}
                           className="p-2 bg-slate-100 dark:bg-zinc-800 rounded-xl text-slate-400 hover:text-yellow-400 transition-all"
                         >
@@ -924,37 +866,6 @@ const SACManager: React.FC<SACManagerProps> = ({ addToast }) => {
                     category={selectedCard.type}
                   />
                 </div>
-
-                {selectedCard.ai_art_url ? (
-                  <div className="relative group">
-                    <img 
-                      src={selectedCard.ai_art_url} 
-                      alt="Cartão IA" 
-                      className="w-full max-w-md rounded-3xl shadow-2xl border-4 border-slate-900 transition-transform group-hover:scale-[1.02]"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-3xl">
-                      <button 
-                        onClick={() => generateAIArt(selectedCard)}
-                        className="px-6 py-3 bg-yellow-400 text-slate-900 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-2"
-                      >
-                        <Loader2 className={isGenerating ? "animate-spin" : ""} size={16} />
-                        Gerar Nova Arte IA
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-4 text-center">
-                    <button 
-                      onClick={() => generateAIArt(selectedCard)}
-                      disabled={isGenerating}
-                      className="px-12 py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl flex items-center gap-3 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                      Gerar Arte com IA
-                    </button>
-                  </div>
-                )}
               </div>
 
               <div className="p-8 bg-slate-50 dark:bg-zinc-800/50 border-t border-slate-100 dark:border-zinc-800 flex justify-end">

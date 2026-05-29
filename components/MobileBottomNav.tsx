@@ -2,6 +2,7 @@
 import React from 'react';
 import { LayoutDashboard, Map, Calendar, Menu, BrainCircuit, Timer, BusFront, Ticket, CreditCard, DollarSign, PlayCircle } from 'lucide-react';
 import { ViewState, User } from '../types';
+import { motion } from 'framer-motion';
 
 interface MobileBottomNavProps {
   currentView: ViewState | string;
@@ -33,7 +34,11 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentView, onChange
   });
 
   return (
-    <div className="fixed bottom-0 left-0 w-full h-20 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-t border-slate-100 dark:border-zinc-800 flex items-center justify-around px-4 pb-safe z-[45] shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)] transition-colors">
+    <motion.div 
+      initial={{ y: 100 }}
+      animate={{ y: 0 }}
+      className="fixed bottom-0 left-0 w-full h-20 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl border-t border-slate-100 dark:border-zinc-800 flex items-center justify-around px-4 pb-safe z-[45] shadow-[0_-10px_30px_-15px_rgba(0,0,0,0.1)] transition-colors"
+    >
       {filteredTabs.slice(0, 4).map((tab) => {
         const Icon = tab.icon;
         const isActive = currentView === tab.id;
@@ -46,9 +51,16 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentView, onChange
                     window.dispatchEvent(new CustomEvent('change-tab', { detail: tab.metadata.tab }));
                 }
             }}
-            className={`flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-yellow-600 scale-110' : 'text-slate-400 active:scale-90'}`}
+            className={`relative flex flex-col items-center gap-1 transition-all duration-300 ${isActive ? 'text-yellow-600' : 'text-slate-400 active:scale-90'}`}
           >
-            <div className={`p-2 rounded-xl ${isActive ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-transparent'}`}>
+            {isActive && (
+              <motion.div 
+                layoutId="nav-active"
+                className="absolute -top-3 w-8 h-1 bg-yellow-400 rounded-full"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
+            <div className={`p-2 rounded-xl transition-all ${isActive ? 'bg-yellow-50 dark:bg-yellow-900/10 scale-110' : 'bg-transparent'}`}>
                 <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
             </div>
             <span className="text-[9px] font-black uppercase tracking-widest">{tab.label}</span>
@@ -65,7 +77,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentView, onChange
         </div>
         <span className="text-[9px] font-black uppercase tracking-widest">Mais</span>
       </button>
-    </div>
+    </motion.div>
   );
 };
 

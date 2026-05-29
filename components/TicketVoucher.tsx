@@ -53,49 +53,60 @@ const TicketVoucher: React.FC<TicketVoucherProps> = ({ type, lastTicket, selecte
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 border-y-2 border-black py-4 mb-6">
-                <div className="text-center border-r-2 border-black">
+            <div className="grid grid-cols-3 gap-4 border-y-2 border-black py-6 mb-6">
+                <div className="text-center border-r-2 border-black px-2">
                     <p className="text-[9px] font-bold uppercase">POLTRONA</p>
                     <p className="text-3xl font-black">{lastTicket.seat_number.toString().padStart(2, '0')}</p>
                 </div>
-                <div className="text-center border-r-2 border-black">
+                <div className="text-center border-r-2 border-black px-2">
                     <p className="text-[9px] font-bold uppercase">CARRO</p>
                     <p className="text-3xl font-black">{(selectedTrip?.bus_number || lastTicket.is_presale) ? `#${selectedTrip?.bus_number || 'PRE'}` : '---'}</p>
                 </div>
-                <div className="text-center">
-                    <p className="text-[9px] font-bold uppercase">TOTAL PAGO</p>
-                    <p className="text-3xl font-black">R$ {lastTicket.total_price.toFixed(2)}</p>
+                <div className="text-center px-2">
+                    <p className="text-[9px] font-bold uppercase text-gray-400">TOTAL</p>
+                    <p className="text-3xl font-black tracking-tighter">R$ {lastTicket.total_price.toFixed(2)}</p>
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-6 border-b-2 border-black pb-4">
-                <div className="flex justify-between text-[10px]">
-                    <span className="font-bold uppercase">TARIFA:</span>
-                    <span>R$ {(lastTicket.price_base || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                    <span className="font-bold uppercase">PEDÁGIO:</span>
-                    <span>R$ {(lastTicket.price_toll || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                    <span className="font-bold uppercase">TAXA EMBARQUE:</span>
-                    <span>R$ {(lastTicket.price_boarding_fee || 0).toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-[10px]">
-                    <span className="font-bold uppercase">OUTRAS TAXAS:</span>
-                    <span>R$ {(lastTicket.price_fees || 0).toFixed(2)}</span>
-                </div>
-                { (lastTicket.discount_value || 0) > 0 && (
-                    <div className="flex justify-between text-[10px] text-red-600 col-span-2 border-t border-dashed border-gray-300 pt-2">
-                        <span className="font-black uppercase italic">DESCONTO (CUPOM):</span>
-                        <span className="font-black italic">- R$ {lastTicket.discount_value?.toFixed(2)}</span>
+            <div className="grid grid-cols-2 gap-x-12 gap-y-3 mb-6 border-b-2 border-black pb-8 pt-4">
+                <div className="space-y-3">
+                    <div className="flex justify-between text-[11px]">
+                        <span className="font-bold uppercase text-gray-500">Tarifa Base:</span>
+                        <span className="font-black">R$ {(lastTicket.price_base || 0).toFixed(2)}</span>
                     </div>
-                )}
+                    <div className="flex justify-between text-[11px]">
+                        <span className="font-bold uppercase text-gray-500">Pedágio:</span>
+                        <span className="font-black">R$ {(lastTicket.price_toll || 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                        <span className="font-bold uppercase text-gray-500">Taxas e Encargos:</span>
+                        <span className="font-black">R$ {((lastTicket.price_boarding_fee || 0) + (lastTicket.price_fees || 0)).toFixed(2)}</span>
+                    </div>
+                </div>
+                <div className="flex flex-col justify-end items-end border-l-2 border-black pl-8 space-y-2">
+                    <div className="flex justify-between w-full text-[10px]">
+                        <span className="font-bold uppercase text-gray-500">Forma de Pagamento:</span>
+                        <span className="font-black uppercase">{lastTicket.payment_method.replace(/_/g, ' ')}</span>
+                    </div>
+                    { (lastTicket.discount_value || 0) > 0 && (
+                        <div className="flex justify-between w-full text-[10px] text-red-600">
+                            <span className="font-black uppercase italic text-gray-500">Desconto Cupom:</span>
+                            <span className="font-black italic">- R$ {lastTicket.discount_value?.toFixed(2)}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between w-full items-baseline pt-2 border-t border-gray-200">
+                        <span className="text-[10px] font-black uppercase mr-4 tracking-widest text-gray-900">Total Líquido:</span>
+                        <span className="text-3xl font-black italic">R$ {lastTicket.total_price.toFixed(2)}</span>
+                    </div>
+                </div>
             </div>
 
             <div className="mb-6">
                 <p className="text-[10px] font-black uppercase mb-1">PASSAGEIRO: {lastTicket.passenger_name}</p>
-                <p className="text-[10px] uppercase">DOCUMENTO: {lastTicket.passenger_cpf} | PAGAMENTO: {lastTicket.payment_method}</p>
+                <div className="flex justify-between items-center">
+                    <p className="text-[10px] uppercase">DOCUMENTO: {lastTicket.passenger_cpf}</p>
+                    <p className="text-[10px] uppercase font-bold">AGÊNCIA: {lastTicket.booth_data?.name || 'TERMINAL CENTRAL'}</p>
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 mb-6 border-t-2 border-black pt-4">

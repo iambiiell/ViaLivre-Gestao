@@ -545,7 +545,22 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
                         <span className="bg-slate-900 dark:bg-zinc-950 text-yellow-400 font-mono font-black text-2xl px-5 py-3 rounded-2xl border-2 border-slate-800 transition-colors shrink-0">{trip.departure_time}</span>
                         <div className="min-w-0">
                           <span className="text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest block mb-1 break-words whitespace-normal">Linha {route?.prefixo_linha} - {route?.origin} x {route?.destination}</span>
-                          <div className={`text-[10px] font-black uppercase px-3 py-1 rounded-full inline-block transition-colors ${trip.status === 'Agendada' ? 'bg-slate-50 dark:bg-zinc-800 text-slate-500' : 'bg-yellow-50 text-yellow-600 animate-pulse'}`}>{trip.status}</div>
+                          <div className="relative group/tripstatus inline-block cursor-help">
+                            <div className={`status-indicator-badge text-[10px] font-black uppercase px-3 py-1 rounded-full inline-block transition-colors ${
+                              trip.status === 'Agendada' ? 'bg-slate-50 dark:bg-zinc-800 text-slate-500' :
+                              trip.status === 'Atrasada' ? 'bg-red-500 text-white animate-pulse border-2 border-red-300 shadow-md font-extrabold' :
+                              'bg-yellow-50 text-yellow-600 animate-pulse'
+                            }`}>{trip.status}</div>
+
+                            {/* PREMIUM HTML TOOLTIP */}
+                            <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-905 dark:bg-zinc-800 text-slate-105 dark:text-zinc-100 text-[8px] font-black uppercase tracking-wider p-2.5 rounded-xl border-2 border-yellow-400 opacity-0 group-hover/tripstatus:opacity-100 transition-all duration-300 shadow-2xl z-50 text-center scale-95 group-hover/tripstatus:scale-100 leading-normal">
+                              {trip.status === 'Atrasada' ? '⚠️ Atraso Crítico: Mais de 15 minutos do horário agendado de partida sem início de viagem.' :
+                               trip.status === 'Agendada' ? '📅 Agendado: Aguardando despacho e horário de partida oficial.' :
+                               trip.status === 'Finalizada' ? '✅ Concluída: Viagem encerrada e dados catalogados.' :
+                               '🚀 Em Rota: Viagem ativa no trajeto de destino.'}
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-x-4 border-x-transparent border-t-4 border-t-yellow-400 w-0 h-0"></div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2 items-center">

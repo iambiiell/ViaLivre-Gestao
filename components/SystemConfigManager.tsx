@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Save, Loader2, CheckCircle2, AlertTriangle, Settings2, Users, Key, Calendar, CreditCard, RefreshCw } from 'lucide-react';
-import { RoleConfig, Subscription } from '../types';
+import { RoleConfig, Subscription, SystemSettings } from '../types';
 import { db } from '../services/database';
 
 interface SystemConfigManagerProps {
@@ -15,11 +15,37 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [activationKey, setActivationKey] = useState('');
   const [isActivating, setIsActivating] = useState(false);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings | null>(null);
 
   useEffect(() => {
     loadRoles();
     loadSubscription();
+    loadSystemSettings();
   }, []);
+
+  const loadSystemSettings = async () => {
+    try {
+      const data = await db.getSystemSettings();
+      if (data && data.length > 0) {
+        setSystemSettings(data[0]);
+      } else {
+        const defaultSettings: Partial<SystemSettings> = {
+          system_name: 'CONSIMP Controle de Frotas',
+          registration_pattern: 'FLX-000',
+          system_url: window.location.origin
+        };
+        const created = await db.create('system_settings', defaultSettings);
+        setSystemSettings(created as SystemSettings);
+      }
+    } catch (error) {
+      console.error('Error loading system settings:', error);
+    }
+  };
+
+  const handleUpdateSystemSetting = (field: keyof SystemSettings, value: any) => {
+    if (!systemSettings) return;
+    setSystemSettings({ ...systemSettings, [field]: value });
+  };
 
   const loadSubscription = async () => {
     try {
@@ -113,8 +139,11 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
   const handleSaveAll = async () => {
     setIsSaving(true);
     try {
+      if (systemSettings) {
+        await db.update('system_settings', systemSettings);
+      }
       await Promise.all(roles.map(role => db.update('role_configs', role)));
-      addToast("Configurações de acesso atualizadas com sucesso!", "success");
+      addToast("Configurações atualizadas com sucesso!", "success");
     } catch (error) {
       addToast("Erro ao salvar configurações.", "error");
     } finally {
@@ -152,6 +181,45 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
             {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Save size={20} />}
             Salvar Alterações
           </button>
+        </div>
+
+        <div className="bg-white dark:bg-zinc-900 rounded-[3rem] border-2 border-slate-100 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors mb-8">
+          <div className="p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
+            <div className="flex items-center gap-3">
+              <Settings2 className="text-indigo-500" size={24} />
+              <h3 className="text-lg font-black uppercase italic tracking-tighter">Configurações Gerais</h3>
+            </div>
+          </div>
+          <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+               <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest leading-none">URL do Sistema para Integrações</label>
+                  <div className="relative">
+                    <RefreshCw className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="https://sua-url.com" 
+                      className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-zinc-800 border-2 border-slate-100 dark:border-zinc-700 rounded-2xl text-xs font-black outline-none focus:ring-2 ring-indigo-400 transition-all dark:text-white"
+                      value={systemSettings?.system_url || ''}
+                      onChange={e => handleUpdateSystemSetting('system_url', e.target.value)}
+                    />
+                  </div>
+                  <p className="text-[8px] font-bold text-slate-400 uppercase italic mt-2">Esta URL é utilizada para geração de links em tickets e notificações.</p>
+               </div>
+            </div>
+            <div className="space-y-4">
+               <div>
+                  <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest leading-none">Nome do Sistema na Interface</label>
+                  <input 
+                    type="text" 
+                    placeholder="Nome do Sistema" 
+                    className="w-full px-5 py-4 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-700 rounded-2xl text-xs font-black outline-none focus:ring-2 ring-indigo-400 transition-all dark:text-white"
+                    value={systemSettings?.system_name || ''}
+                    onChange={e => handleUpdateSystemSetting('system_name', e.target.value)}
+                  />
+               </div>
+            </div>
+          </div>
         </div>
 
         <div className="bg-white dark:bg-zinc-900 rounded-[3rem] border-2 border-slate-100 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors mb-8">
@@ -223,6 +291,7 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
                   <th className="px-8 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-zinc-800">Vendas</th>
                   <th className="px-8 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-zinc-800">Guia Motorista</th>
                   <th className="px-8 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-zinc-800">Gestão Global</th>
+                  <th className="px-8 py-6 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest border-b dark:border-zinc-800">Monitoramento</th>
                 </tr>
               </thead>
               <tbody className="divide-y dark:divide-zinc-800">
@@ -268,6 +337,17 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
                           className="sr-only peer" 
                           checked={!!role.access_global_management}
                           onChange={() => handleTogglePermission(role.id, 'access_global_management')}
+                        />
+                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-400"></div>
+                      </label>
+                    </td>
+                    <td className="px-8 py-6 text-center">
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          checked={!!role.access_monitoring}
+                          onChange={() => handleTogglePermission(role.id, 'access_monitoring')}
                         />
                         <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-zinc-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-yellow-400"></div>
                       </label>

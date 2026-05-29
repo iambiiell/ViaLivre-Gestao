@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Map, Calendar, LogOut, UsersRound, Building2, ShieldCheck, Bus, ClipboardList, MapPin, UserCircle, X, Menu, Bell, Sun, Moon, BusFront, BarChart, Wrench, Ticket, ClipboardCheck, Settings2, Timer, Banknote, Briefcase, HelpCircle, Headphones, Sparkles, ShieldAlert, Key, CreditCard, PlayCircle, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Map, Calendar, LogOut, UsersRound, Building2, ShieldCheck, Bus, ClipboardList, MapPin, UserCircle, X, Menu, Bell, Sun, Moon, BusFront, BarChart, Wrench, Ticket, ClipboardCheck, Settings2, Timer, Banknote, Briefcase, HelpCircle, Headphones, Sparkles, ShieldAlert, Key, CreditCard, PlayCircle, DollarSign, Activity } from 'lucide-react';
 import { ViewState, User, ThemeMode, RoleConfig, SystemSettings } from '../types';
 
 interface SidebarProps {
@@ -22,6 +22,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, isOpen, onClose, onToggle, currentUser, userRoleConfig, themeMode, onToggleTheme, unreadNotificationsCount = 0, systemSettings }) => {
   const allMenuItems = [
     { id: 'operation-center', label: 'CENTRO OPERACIONAL', icon: PlayCircle },
+    { id: 'monitoring', label: 'MONITORAMENTO', icon: Activity },
     { id: 'dashboard', label: 'PAINEL GERAL', icon: LayoutDashboard, accessKey: 'access_dashboard' },
     { id: 'management', label: 'GESTÃO GLOBAL', icon: Briefcase, accessKey: 'access_global_management' },
     { id: 'skins', label: 'REPOSITÓRIO DE SKINS', icon: Bus, accessKey: 'access_skins' },
@@ -39,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: 'routes', label: 'ITINERÁRIOS', icon: Map },
     { id: 'schedule', label: 'ESCALA DE VIAGENS', icon: Calendar },
     { id: 'dispatcher', label: 'DESPACHANTE', icon: ShieldCheck, accessKey: 'access_dispatcher' },
-    { id: 'sac', label: 'SAC - IMPCARD', icon: Headphones },
+    { id: 'sac', label: 'Vale Transporte', icon: Headphones },
     { id: 'work-with-us', label: 'TRABALHE CONOSCO', icon: Briefcase },
     { id: 'vehicles', label: 'FROTA DE ÔNIBUS', icon: Bus },
     { id: 'drivers', label: 'COLABORADORES', icon: UsersRound },
@@ -179,7 +180,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                 </div>
                 <div className="hidden md:block text-left">
                     <p className="text-[10px] font-black uppercase text-slate-800 dark:text-zinc-100 leading-none">{currentUser.full_name?.split(' ')[0]}</p>
-                    <p className="text-[8px] font-black text-yellow-600 uppercase tracking-widest mt-1">{currentUser.role === 'RH' ? 'REC. HUMANOS' : currentUser.role}</p>
+                    <p className="text-[8px] font-black text-yellow-600 uppercase tracking-widest mt-1">
+                      {currentUser.role === 'RH' ? 'REC. HUMANOS' : 
+                       (currentUser.role === 'ADMIN' || currentUser.is_full_admin || currentUser.job_title?.toUpperCase().includes('ADMINISTRADOR')) ? 'ADMINISTRADOR' : 
+                       currentUser.role}
+                    </p>
                 </div>
             </div>
         )}

@@ -2,6 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { Building2, PlayCircle, Users, DollarSign, Bus, TrendingUp, Clock, Calendar, ArrowRight, Search, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Trip, BusRoute, Company, IssueReport, City, PassengerDetails, Subscription } from '../types';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 interface DashboardProps {
   allTrips: Trip[];
@@ -12,14 +14,38 @@ interface DashboardProps {
   subscription?: Subscription | null;
 }
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-slate-900 text-white p-4 rounded-2xl border border-slate-800 shadow-xl text-[10px] font-black uppercase">
+        <p className="text-yellow-400 font-black mb-1">{`Horário: ${label}`}</p>
+        {payload.map((item: any, idx: number) => {
+          const isRev = item.name === 'Faturamento Líquido';
+          return (
+            <p key={idx} style={{ color: item.color }} className="font-bold">
+              {item.name}: {isRev ? `R$ ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : item.value}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+};
+
 const formatDateBr = (dateStr: string) => {
     if (!dateStr) return '---';
     const [y, m, d] = dateStr.split('-');
     return `${d}.${m}.${y}`;
 };
 
-const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string; textColor: string }> = ({ title, value, icon, color, textColor }) => (
-  <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 flex items-center justify-between group transition-colors">
+const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string; textColor: string; delay?: number }> = ({ title, value, icon, color, textColor, delay = 0 }) => (
+  <motion.div 
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.5, delay }}
+    className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 flex items-center justify-between group transition-colors"
+  >
     <div>
       <p className="text-[9px] font-black text-black dark:text-zinc-500 uppercase tracking-[0.2em] mb-1">{title}</p>
       <h3 className="text-2xl font-black text-slate-800 dark:text-white leading-none tracking-tighter">{value}</h3>
@@ -27,7 +53,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
     <div className={`w-14 h-14 rounded-2xl ${color} ${textColor} shadow-lg flex items-center justify-center transition-transform group-hover:rotate-12 border-2 border-slate-900 dark:border-zinc-800`}>
       {icon}
     </div>
-  </div>
+  </motion.div>
 );
 
 const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], companies = [], subscription }) => {
@@ -61,6 +87,61 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
       }
     });
     return { totalPax, revenue, tripCount };
+  }, [allTrips, routes, filterCompanyId]);
+
+  const hourlyData = useMemo(() => {
+    const hoursMap: Record<string, { hour: string; passengers: number; revenue: number }> = {};
+    
+    // Initialize standard operating hours (05:00 to 23:00)
+    for (let h = 5; h <= 23; h++) {
+      const hStr = h.toString().padStart(2, '0');
+      hoursMap[hStr] = {
+        hour: `${hStr}:00`,
+        passengers: 0,
+        revenue: 0
+      };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    let filteredTrips = allTrips.filter(t => 
+      t.trip_date.split('T')[0] === today && 
+      (!filterCompanyId || routes.find(r => r.id === t.route_id)?.company_id === filterCompanyId)
+    );
+
+    // Fallback: If today's trips are empty or have zero passenger entries, 
+    // fall back to grouping all loaded trips to ensure the chart is populated!
+    if (filteredTrips.length === 0 || filteredTrips.every(t => !t.passengers || Object.keys(t.passengers).length === 0)) {
+      filteredTrips = allTrips.filter(t => 
+        !filterCompanyId || routes.find(r => r.id === t.route_id)?.company_id === filterCompanyId
+      );
+    }
+
+    filteredTrips.forEach(trip => {
+      const hourPart = trip.departure_time ? trip.departure_time.split(':')[0] : '00';
+      if (!hoursMap[hourPart]) {
+        hoursMap[hourPart] = {
+          hour: `${hourPart}:00`,
+          passengers: 0,
+          revenue: 0
+        };
+      }
+
+      const route = routes.find(r => r.id === trip.route_id);
+      Object.values(trip.passengers || {}).forEach((p: any) => {
+        const paxInTrip = (p.pagantes || 0) + (p.vale_transporte || 0) + (p.imp_card || 0) + (p.gratuitos || 0);
+        hoursMap[hourPart].passengers += paxInTrip;
+        
+        if (route) {
+          let tripRevenue = ((p.pagantes || 0) + (p.vale_transporte || 0)) * (route.price || 0);
+          tripRevenue += (p.imp_card || 0) * ((route.price || 0) * 0.7);
+          hoursMap[hourPart].revenue += tripRevenue;
+        }
+      });
+    });
+
+    return Object.keys(hoursMap)
+      .sort((a, b) => parseInt(a) - parseInt(b))
+      .map(key => hoursMap[key]);
   }, [allTrips, routes, filterCompanyId]);
 
   const activeTodayTrips = useMemo(() => {
@@ -118,13 +199,72 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
 
       <div className="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
         <div className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
-          <StatCard title="Operação do Dia" value={summary.tripCount.toString()} icon={<PlayCircle size={24} />} color="bg-slate-900" textColor="text-white" />
+          <StatCard title="Operação do Dia" value={summary.tripCount.toString()} icon={<PlayCircle size={24} />} color="bg-slate-900" textColor="text-white" delay={0.1} />
         </div>
         <div className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
-          <StatCard title="Pax Projetado" value={summary.totalPax.toLocaleString()} icon={<Users size={24} />} color="bg-yellow-400" textColor="text-slate-900" />
+          <StatCard title="Pax Projetado" value={summary.totalPax.toLocaleString()} icon={<Users size={24} />} color="bg-yellow-400" textColor="text-slate-900" delay={0.2} />
         </div>
         <div className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
-          <StatCard title="Receita Líquida Estimada" value={summary.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon={<DollarSign size={24} />} color="bg-emerald-500" textColor="text-white" />
+          <StatCard title="Receita Líquida Estimada" value={summary.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon={<DollarSign size={24} />} color="bg-emerald-500" textColor="text-white" delay={0.3} />
+        </div>
+      </div>
+
+      {/* Painel Gráfico de Demanda e Receita */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Gráfico 1: Passageiros por Hora (Ocupação) */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-zinc-800 shadow-sm flex flex-col h-[400px]">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <p className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none mb-1">Ocupação Horária</p>
+              <h4 className="text-sm font-black text-slate-800 dark:text-zinc-100 uppercase italic">Passageiros por Horário (Pax/Hora)</h4>
+            </div>
+            <span className="p-3 bg-yellow-50 dark:bg-yellow-950/20 text-yellow-600 rounded-2xl border border-yellow-250 dark:border-yellow-900/30">
+              <Users size={20} />
+            </span>
+          </div>
+          
+          <div className="flex-1 w-full min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={hourlyData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorPax" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#EAB308" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#EAB308" stopOpacity={0.0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" className="dark:stroke-zinc-800/50" />
+                <XAxis dataKey="hour" fontSize={8} fontWeight="bold" stroke="#94A3B8" />
+                <YAxis fontSize={8} fontWeight="bold" stroke="#94A3B8" />
+                <Tooltip content={<CustomTooltip />} />
+                <Area type="monotone" dataKey="passengers" name="Passageiros Transportados" stroke="#EAB308" strokeWidth={3} fillOpacity={1} fill="url(#colorPax)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfico 2: Receita Distribuída por Horário */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-zinc-800 shadow-sm flex flex-col h-[400px]">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <p className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none mb-1">Receita Distribuída</p>
+              <h4 className="text-sm font-black text-slate-800 dark:text-zinc-100 uppercase italic">Receita por Horário de Partida (R$/Hora)</h4>
+            </div>
+            <span className="p-3 bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 rounded-2xl border border-emerald-200 dark:border-emerald-900/30">
+              <DollarSign size={20} />
+            </span>
+          </div>
+
+          <div className="flex-1 w-full min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={hourlyData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" className="dark:stroke-zinc-800/50" />
+                <XAxis dataKey="hour" fontSize={8} fontWeight="bold" stroke="#94A3B8" />
+                <YAxis fontSize={8} fontWeight="bold" stroke="#94A3B8" tickFormatter={(v) => `R$${v}`} />
+                <Tooltip content={<CustomTooltip />} />
+                <Bar dataKey="revenue" name="Faturamento Líquido" fill="#10B981" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 

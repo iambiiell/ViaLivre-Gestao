@@ -88,6 +88,27 @@ CREATE TABLE IF NOT EXISTS public.skins (
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Guichês de Venda
+CREATE TABLE IF NOT EXISTS public.ticket_booths (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    system_id UUID,
+    company_id UUID REFERENCES public.companies(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    cnpj TEXT NOT NULL,
+    ie TEXT,
+    address_street TEXT NOT NULL,
+    address_number TEXT NOT NULL,
+    address_neighborhood TEXT NOT NULL,
+    address_city TEXT NOT NULL,
+    address_state TEXT NOT NULL,
+    address_complement TEXT,
+    phone TEXT NOT NULL,
+    email TEXT NOT NULL,
+    booth_manager TEXT,
+    active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Adicionar system_id em todas as tabelas para isolamento de dados
 DO $$ 
 DECLARE 

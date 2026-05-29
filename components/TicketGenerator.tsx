@@ -75,7 +75,7 @@ export const downloadTicket = async (saleId: string, originName?: string, destin
       doc.text('AGÊNCIA VENDA', 62, yOffset + 39);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text(`TERMINAL CENTRAL - ${(sale.payment_method || '').toUpperCase()}`, 62, yOffset + 46);
+      doc.text((sale.booth_data?.name || 'TERMINAL CENTRAL').toUpperCase(), 62, yOffset + 46);
 
       // Route Info
       doc.rect(10, yOffset + 50, 190, 12);
@@ -115,8 +115,8 @@ export const downloadTicket = async (saleId: string, originName?: string, destin
       doc.text((route?.prefixo_linha || '---').toUpperCase(), 12 + colWidth*4, yOffset + 77);
 
       // Passenger and Price
-      doc.rect(10, yOffset + 83, 110, 20);
-      doc.rect(125, yOffset + 83, 75, 20);
+      doc.rect(10, yOffset + 83, 110, 22);
+      doc.rect(125, yOffset + 83, 75, 22); // Slightly larger
       
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
@@ -125,38 +125,63 @@ export const downloadTicket = async (saleId: string, originName?: string, destin
       doc.setFont('helvetica', 'bold');
       doc.text(`NOME: ${(sale.passenger_name || 'PASSAGEIRO INDEFINIDO').toUpperCase()}`, 12, yOffset + 93);
       doc.text(`DOC: ${sale.passenger_cpf || '---'}`, 12, yOffset + 98);
+      
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`RESPONSÁVEL: ${(sale.responsible_name || 'PRÓPRIO').toUpperCase()}`, 12, yOffset + 103);
 
       // Vehicle Info at the end
       doc.setDrawColor(0);
-      doc.rect(10, yOffset + 103, 110, 8);
-      doc.setFontSize(7);
+      doc.rect(10, yOffset + 105, 110, 6);
+      doc.setFontSize(6.5);
       doc.setFont('helvetica', 'normal');
-      doc.text(`VEÍCULO: ${(sale.vehicle_model || '---').toUpperCase()} | PREFIXO: ${(sale.vehicle_prefix || '---').toUpperCase()}`, 12, yOffset + 108);
+      doc.text(`VEÍCULO: ${(sale.vehicle_model || '---').toUpperCase()} | PREFIXO: ${(sale.vehicle_prefix || '---').toUpperCase()}`, 12, yOffset + 109);
 
       doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
+      doc.setFont('helvetica', 'bold');
       doc.text('COMPOSIÇÃO DE PREÇO', 127, yOffset + 87);
       doc.setFontSize(8);
-      doc.text('Tarifa:', 127, yOffset + 91);
-      doc.text((sale.price_base || 0).toFixed(2), 198, yOffset + 91, { align: 'right' });
-      doc.text('Pedágio:', 127, yOffset + 94);
-      doc.text((sale.price_toll || 0).toFixed(2), 198, yOffset + 94, { align: 'right' });
-      doc.text('Taxas:', 127, yOffset + 97);
-      doc.text(((sale.price_boarding_fee || 0) + (sale.price_fees || 0)).toFixed(2), 198, yOffset + 97, { align: 'right' });
-      doc.text(`PAGTO: ${sale.payment_method}`, 127, yOffset + 100);
+      doc.setFont('helvetica', 'normal');
       
+      let currentY = yOffset + 91;
+      const lineHeight = 3.5;
+
+      doc.text('Tarifa Base:', 127, currentY);
+      doc.text((sale.price_base || 0).toFixed(2), 198, currentY, { align: 'right' });
+      currentY += lineHeight;
+
+      doc.text('Pedágio:', 127, currentY);
+      doc.text((sale.price_toll || 0).toFixed(2), 198, currentY, { align: 'right' });
+      currentY += lineHeight;
+
+      doc.text('Taxas/Enc.:', 127, currentY);
+      doc.text(((sale.price_boarding_fee || 0) + (sale.price_fees || 0)).toFixed(2), 198, currentY, { align: 'right' });
+      currentY += lineHeight;
+
       if ((sale.discount_value || 0) > 0) {
         doc.setFont('helvetica', 'bolditalic');
-        doc.text('Desconto:', 127, yOffset + 103);
-        doc.text(`- ${(sale.discount_value || 0).toFixed(2)}`, 198, yOffset + 103, { align: 'right' });
-        doc.setFont('helvetica', 'bold');
-        doc.text('TOTAL R$:', 127, yOffset + 106);
-        doc.text((sale.total_price || 0).toFixed(2), 198, yOffset + 106, { align: 'right' });
-      } else {
-        doc.setFont('helvetica', 'bold');
-        doc.text('TOTAL R$:', 127, yOffset + 104);
-        doc.text((sale.total_price || 0).toFixed(2), 198, yOffset + 104, { align: 'right' });
+        doc.setTextColor(200, 0, 0);
+        doc.text('Desconto:', 127, currentY);
+        doc.text(`- ${(sale.discount_value || 0).toFixed(2)}`, 198, currentY, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'normal');
+        currentY += lineHeight;
       }
+      
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
+      doc.text('PAGAMENTO:', 127, currentY);
+      doc.text((sale.payment_method || '').toUpperCase().replace(/_/g, ' '), 198, currentY, { align: 'right' });
+      currentY += lineHeight;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.text('TOTAL R$:', 127, currentY + 1.5);
+      doc.text((sale.total_price || 0).toFixed(2), 198, currentY + 1.5, { align: 'right' });
+
+      // doc.setFontSize(7); // Removed from here as requested
+      // doc.setFont('helvetica', 'normal');
+      // doc.text(`PAGTO: ${(sale.payment_method || '').toUpperCase()}`, 12, yOffset + 110);
 
       // Footer / Access Key
       doc.rect(10, yOffset + 112, 190, 15);

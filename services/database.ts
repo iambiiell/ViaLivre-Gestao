@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 export { supabase };
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-export type TableName = 'routes' | 'trips' | 'users' | 'companies' | 'vehicles' | 'occurrences' | 'cities' | 'notices' | 'push_subscriptions' | 'ticket_sales' | 'maintenance' | 'inspections' | 'ticketing_config' | 'payroll_rubrics' | 'role_configs' | 'notifications' | 'shifts' | 'time_tracking' | 'driver_logs' | 'routes_logs' | 'system_settings' | 'imp_cards' | 'imp_card_recharges' | 'user_occurrences' | 'traffic_violations' | 'user_fines' | 'job_applications' | 'job_vacancies' | 'skins' | 'trips_audit' | 'activation_keys' | 'subscriptions';
+export type TableName = 'routes' | 'trips' | 'users' | 'companies' | 'vehicles' | 'occurrences' | 'cities' | 'notices' | 'push_subscriptions' | 'ticket_sales' | 'maintenance' | 'inspections' | 'ticketing_config' | 'payroll_rubrics' | 'role_configs' | 'notifications' | 'shifts' | 'time_tracking' | 'driver_logs' | 'routes_logs' | 'system_settings' | 'imp_cards' | 'imp_card_recharges' | 'user_occurrences' | 'traffic_violations' | 'user_fines' | 'job_applications' | 'job_vacancies' | 'skins' | 'trips_audit' | 'activation_keys' | 'subscriptions' | 'ticket_booths';
 
 export const cleanPayload = (table: TableName, obj: any, isUpdate = false) => {
   if (!obj || typeof obj !== 'object') return {};
@@ -45,7 +45,7 @@ export const db = {
     'system_settings', 'imp_cards', 
     'imp_card_recharges', 'user_occurrences', 'traffic_violations', 'user_fines',
     'job_applications', 'job_vacancies', 'skins', 'trips_audit',
-    'subscriptions'
+    'subscriptions', 'ticket_booths'
   ],
 
   fetchAll: async <T>(table: TableName): Promise<T[]> => {
@@ -196,6 +196,7 @@ export const db = {
   getTripsAudit: () => db.fetchAll<any>('trips_audit'),
   getActivationKeys: () => db.fetchAll<any>('activation_keys'),
   getSubscriptions: () => db.fetchAll<any>('subscriptions'),
+  getTicketBooths: () => db.fetchAll<any>('ticket_booths'),
   getAllUsers: () => db.fetchAllGlobal<User>('users'),
   getAllActivationKeys: () => db.fetchAllGlobal<any>('activation_keys'),
   getAllSubscriptions: () => db.fetchAllGlobal<any>('subscriptions'),

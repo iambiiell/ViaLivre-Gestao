@@ -101,10 +101,13 @@ export interface BusRoute {
   letreiro_principal_velocidade: number;
   via1?: string;
   via1_modo: 'FIXO' | 'ROLANTE';
+  via1_cor?: LedColor;
   via2?: string;
   via2_modo: 'FIXO' | 'ROLANTE';
+  via2_cor?: LedColor;
   via3?: string;
   via3_modo: 'FIXO' | 'ROLANTE';
+  via3_cor?: LedColor;
   lightdot_code: string;
   route_type?: 'URBANO' | 'RODOVIARIA' | 'INTERMUNICIPAL';
   payment_type?: 'QUALQUER_UM' | 'RODOVIARIO_APENAS' | 'URBANO_APENAS';
@@ -167,6 +170,14 @@ export interface User {
   sunday_clock_in?: string;
   sunday_clock_out?: string;
   sunday_interval?: string;
+  notification_preferences?: {
+    schedule?: boolean;
+    delay?: boolean;
+    maintenance?: boolean;
+    inspection?: boolean;
+    occurrence?: boolean;
+    ticketing?: boolean;
+  };
   permissions?: ViewState[];
   is_full_admin?: boolean;
   activation_key?: string;
@@ -186,6 +197,7 @@ export interface RoleConfig {
   access_sales?: boolean;
   access_driver_guide?: boolean;
   access_global_management?: boolean;
+  access_monitoring?: boolean;
 }
 
 export interface DriverLog {
@@ -227,7 +239,7 @@ export interface AppNotification {
   metadata?: any;
 }
 
-export type ViewState = 'dashboard' | 'routes' | 'schedule' | 'drivers' | 'companies' | 'users' | 'vehicles' | 'observations' | 'cities' | 'notices' | 'reports-view' | 'maintenance' | 'ticketing' | 'inspections' | 'ticketing-config' | 'time-tracking' | 'payroll' | 'management' | 'shifts' | 'notifications' | 'dispatcher' | 'sac' | 'work-with-us' | 'recruitment' | 'about' | 'skins' | 'subscriptions' | 'license-management' | 'my-subscription' | 'system-config' | 'driver-view' | 'passenger-view' | 'driver-urban' | 'driver-road' | 'conductor' | 'operation-center';
+export type ViewState = 'dashboard' | 'routes' | 'schedule' | 'drivers' | 'companies' | 'users' | 'vehicles' | 'observations' | 'cities' | 'notices' | 'reports-view' | 'maintenance' | 'ticketing' | 'inspections' | 'ticketing-config' | 'time-tracking' | 'payroll' | 'management' | 'shifts' | 'notifications' | 'dispatcher' | 'sac' | 'work-with-us' | 'recruitment' | 'about' | 'skins' | 'subscriptions' | 'license-management' | 'my-subscription' | 'system-config' | 'driver-view' | 'passenger-view' | 'driver-urban' | 'driver-road' | 'conductor' | 'operation-center' | 'monitoring';
 
 export interface ActivationKey {
   id: string;
@@ -309,6 +321,26 @@ export interface Company {
   address_complement?: string;
 }
 
+export interface TicketBooth {
+  id: string;
+  system_id?: string;
+  company_id: string;
+  name: string;
+  cnpj: string;
+  ie?: string;
+  address_street: string;
+  address_number: string;
+  address_neighborhood: string;
+  address_city: string;
+  address_state: string;
+  address_complement?: string;
+  phone: string;
+  email: string;
+  booth_manager?: string;
+  active: boolean;
+  created_at?: string;
+}
+
 export interface Vehicle {
   id: string;
   system_id?: string;
@@ -366,7 +398,7 @@ export interface TicketSale {
   address_neighborhood: string;
   address_city: string;
   address_state: string;
-  payment_method: 'DINHEIRO' | 'DEBITO' | 'CREDITO' | 'IMPCARD' | 'PIX';
+  payment_method: 'DINHEIRO' | 'DEBITO' | 'CREDITO' | 'IMPCARD' | 'PIX' | 'VALE_TRANSPORTE' | 'VALE TRANSPORTE';
   coupon_applied?: string;
   total_price: number;
   price_base?: number;
@@ -398,6 +430,13 @@ export interface TicketSale {
   responsible_name?: string;
   responsible_birth?: string;
   relationship?: string;
+  booth_id?: string;
+  booth_data?: {
+    name: string;
+    cnpj: string;
+    address: string;
+    phone: string;
+  };
   // Joins
   routes?: { origin: string; destination: string; name: string };
   trips?: { departure_time: string; bus_number: string };
@@ -544,6 +583,15 @@ export interface Shift {
   start_time: string;
   end_time: string;
   date: string;
+  scale_type?: string;
+  standard_interval?: string;
+  saturday_clock_in?: string;
+  saturday_clock_out?: string;
+  saturday_interval?: string;
+  sunday_clock_in?: string;
+  sunday_clock_out?: string;
+  sunday_interval?: string;
+  daily_hours_target?: string;
 }
 
 export interface ShiftSwapRequest {
@@ -565,6 +613,7 @@ export interface SystemSettings {
   support_email?: string;
   system_name?: string;
   system_logo?: string;
+  system_url?: string;
   maintenance_intervals?: { [vehicleType: string]: number };
 }
 

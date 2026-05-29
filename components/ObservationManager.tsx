@@ -124,7 +124,7 @@ const ObservationManager: React.FC<ObservationManagerProps> = ({ reports = [], t
            <h2 className="text-3xl font-black text-slate-800 dark:text-zinc-100 uppercase italic leading-none transition-colors">Oficina & Chamados</h2>
            <div className="mt-6 relative max-w-md">
               <Search className="absolute left-4 top-4 text-slate-400" size={18} />
-              <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none text-[10px] font-black uppercase outline-none dark:text-zinc-300 shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <input type="text" placeholder="Pesquisar..." className="w-full pl-12 pr-4 py-4 rounded-2xl bg-slate-50 dark:bg-zinc-800 border-none text-[10px] font-black outline-none dark:text-zinc-300 shadow-inner" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
         </div>
       </div>

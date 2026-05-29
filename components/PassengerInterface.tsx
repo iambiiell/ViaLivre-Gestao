@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BusRoute, Trip, Company, Notice, Vehicle, ImpCard, ImpCardPaymentMethod, ImpCardRecharge, PushSubscription, City } from '../types';
 import { Clock, Search, X, Bus, MapPin, Bell, ShoppingCart, Loader2, Megaphone, SmartphoneNfc, Moon, Sun, Users, Ticket, Share2, ArrowRight, CreditCard, DollarSign, Briefcase } from 'lucide-react';
-import { cpfMask } from '../utils/masks';
+import { cpfMask, cepMask, phoneMask } from '../utils/masks';
+import { fetchAddress } from '../services/cep';
 import TicketAgentInterface from './TicketAgentInterface';
 import JobApplicationForm from './JobApplicationForm';
 import { db } from '../services/database';
@@ -18,7 +19,7 @@ interface PassengerInterfaceProps {
   vehicles?: Vehicle[];
   addToast: (message: string, type?: 'success' | 'error' | 'warning') => void;
   onExit: () => void;
-  onOpenTicketing: () => void;
+  onOpenTicketing: (tripId?: string, passengerData?: any) => void;
 }
 
 const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, companies, cities = [], notices = [], vehicles = [], addToast, onExit, onOpenTicketing }) => {
@@ -38,13 +39,92 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
   // Card Login state
   const [showCardLogin, setShowCardLogin] = useState(false);
   const [isCardLoggedIn, setIsCardLoggedIn] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [loggedInCard, setLoggedInCard] = useState<ImpCard | null>(null);
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [isRegisteringPassword, setIsRegisteringPassword] = useState(false);
+  const [loginContext, setLoginContext] = useState<'GENERAL' | 'PURCHASE'>('GENERAL');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   
+  const [registrationForm, setRegistrationForm] = useState<Partial<ImpCard>>({
+    name: '',
+    surname: '',
+    cpf: '',
+    rg: '',
+    birth_date: '',
+    cep: '',
+    address_street: '',
+    address_number: '',
+    address_complement: '',
+    address_neighborhood: '',
+    address_city: '',
+    address_state: '',
+    phone: '',
+    email: '',
+    type: 'Vale Transporte',
+    password: '',
+    balance: 0,
+    responsible_name: '',
+    responsible_birth_date: '',
+    relationship: '',
+    seat_number: 0
+  });
+
+  const handleRegisterPassenger = async () => {
+    if (!registrationForm.cpf || !registrationForm.name || (loginContext !== 'PURCHASE' && !registrationForm.password)) {
+        addToast("CPF, Nome e Senha são obrigatórios.", "warning");
+        return;
+    }
+    
+    setIsRecharging(true);
+    try {
+        if (loginContext === 'PURCHASE') {
+            // Guest registration for purchase - No ImpCard created
+            const guestCard: Partial<ImpCard> = { 
+                ...registrationForm, 
+                card_number: 'GUEST', 
+                balance: 0,
+                type: 'Vale Transporte'
+            };
+            setLoggedInCard(guestCard as ImpCard);
+            setIsCardLoggedIn(true);
+            setIsGuest(true);
+            setIsRegistering(false);
+            setShowCardLogin(false);
+            addToast("Cadastro realizado para compra. Prossiga para selecionar o assento.", "success");
+            onOpenTicketing();
+            return;
+        }
+
+        const cards = await db.getImpCards();
+        if (cards.some(c => c.cpf === registrationForm.cpf)) {
+            addToast("Este CPF já possui um cartão cadastrado.", "error");
+            return;
+        }
+
+        const cardNumber = Math.floor(10000000 + Math.random() * 90000000).toString();
+        const newCard = await db.create<ImpCard>('imp_cards', {
+            ...registrationForm,
+            card_number: cardNumber,
+            created_at: new Date().toISOString()
+        } as ImpCard);
+
+        addToast(`Cadastro realizado! Seu cartão é: ${cardNumber}`, "success");
+        setLoggedInCard(newCard);
+        setIsCardLoggedIn(true);
+        setIsGuest(false);
+        setIsRegistering(false);
+        setShowCardLogin(false);
+    } catch (error) {
+        addToast("Erro ao realizar cadastro.", "error");
+    } finally {
+        setIsRecharging(false);
+    }
+  };
+
   const [hiddenNotices, setHiddenNotices] = useState<Set<string>>(() => {
       const saved = localStorage.getItem('passenger_hidden_notices');
       return saved ? new Set(JSON.parse(saved)) : new Set();
@@ -86,6 +166,29 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
       addToast("Erro ao consultar CEP.", "error");
     } finally {
       setIsCepLoading(false);
+    }
+  };
+
+  const handleRegistrationCepSearch = async (cep: string) => {
+    const maskedCep = cepMask(cep);
+    setRegistrationForm(prev => ({ ...prev, cep: maskedCep }));
+    const cleanCep = maskedCep.replace(/\D/g, '');
+    if (cleanCep.length === 8) {
+      setIsCepLoading(true);
+      try {
+        const data = await fetchAddress(cleanCep);
+        if (data) {
+          setRegistrationForm(prev => ({
+            ...prev,
+            address_street: (data.addressStreet || '').toUpperCase(),
+            address_neighborhood: (data.addressNeighborhood || '').toUpperCase(),
+            address_city: (data.addressCity || '').toUpperCase(),
+            address_state: (data.addressState || '').toUpperCase()
+          }));
+        }
+      } finally {
+        setIsCepLoading(false);
+      }
     }
   };
 
@@ -311,28 +414,135 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
       
       {showCardLogin && (
           <div className="fixed inset-0 z-[800] bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
-              <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[3rem] border-4 border-yellow-400 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-                  <div className="p-8 border-b dark:border-zinc-800 flex justify-between items-center bg-yellow-400 text-slate-900">
-                      <h3 className="text-xl font-black uppercase italic italic">Acesso ao Cartão</h3>
-                      <button onClick={() => setShowCardLogin(false)} className="p-2 bg-slate-900 text-white rounded-xl"><X size={20}/></button>
+              <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[3rem] border-4 shadow-2xl overflow-hidden flex flex-col max-h-[90vh] transition-all duration-500 border-yellow-400">
+                  <div className="p-8 border-b dark:border-zinc-800 flex justify-between items-center text-slate-900 bg-yellow-400">
+                      <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg bg-slate-900 text-white">
+                              <SmartphoneNfc size={24}/>
+                          </div>
+                        <h3 className="text-xl font-black uppercase italic">{isRegistering ? 'Cadastro de Passageiro' : loginContext === 'PURCHASE' ? 'Identificação de Compra' : 'Acesso ao Cartão'}</h3>
+                      </div>
+                      <button onClick={() => { setShowCardLogin(false); setIsRegistering(false); }} className="p-2 bg-slate-900 text-white rounded-xl"><X size={20}/></button>
                   </div>
                   <div className="p-8 space-y-6 overflow-y-auto">
-                      {isRegisteringPassword ? (
+                      {loginContext === 'PURCHASE' && (
+                        <p className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 p-4 rounded-xl text-[10px] font-black uppercase leading-tight text-center border-2 border-indigo-100 dark:border-indigo-800">Para prosseguir com a compra é necessário realizar o cadastro ou login no sistema.</p>
+                      )}
+                      {isRegistering ? (
+                          <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Nome</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.name} onChange={e => setRegistrationForm({...registrationForm, name: e.target.value.toUpperCase()})} />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Sobrenome</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.surname} onChange={e => setRegistrationForm({...registrationForm, surname: e.target.value.toUpperCase()})} />
+                                  </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">CPF</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.cpf} onChange={e => setRegistrationForm({...registrationForm, cpf: cpfMask(e.target.value)})} />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Data de Nasc.</label>
+                                      <input type="date" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.birth_date} onChange={e => setRegistrationForm({...registrationForm, birth_date: e.target.value})} />
+                                  </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Telefone</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.phone} onChange={e => setRegistrationForm({...registrationForm, phone: phoneMask(e.target.value)})} />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">E-mail</label>
+                                      <input type="email" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.email} onChange={e => setRegistrationForm({...registrationForm, email: e.target.value})} />
+                                  </div>
+                              </div>
+                              <hr className="dark:border-zinc-800" />
+                              <div className="grid grid-cols-3 gap-4">
+                                  <div className="col-span-1">
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">CEP</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.cep} onChange={e => handleRegistrationCepSearch(e.target.value)} />
+                                  </div>
+                                  <div className="col-span-2">
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Rua/Logradouro</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.address_street} onChange={e => setRegistrationForm({...registrationForm, address_street: e.target.value.toUpperCase()})} />
+                                  </div>
+                              </div>
+                              <div className="grid grid-cols-3 gap-4">
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Número</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.address_number} onChange={e => setRegistrationForm({...registrationForm, address_number: e.target.value.toUpperCase()})} />
+                                  </div>
+                                  <div className="col-span-2">
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Bairro</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.address_neighborhood} onChange={e => setRegistrationForm({...registrationForm, address_neighborhood: e.target.value.toUpperCase()})} />
+                                  </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Cidade</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.address_city} onChange={e => setRegistrationForm({...registrationForm, address_city: e.target.value.toUpperCase()})} />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Estado</label>
+                                      <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.address_state} onChange={e => setRegistrationForm({...registrationForm, address_state: e.target.value.toUpperCase()})} />
+                                  </div>
+                              </div>
+                              <div>
+                                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Complemento</label>
+                                  <input type="text" className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none" value={registrationForm.address_complement} onChange={e => setRegistrationForm({...registrationForm, address_complement: e.target.value.toUpperCase()})} />
+                              </div>
+
+                              {registrationForm.birth_date && (new Date().getFullYear() - new Date(registrationForm.birth_date).getFullYear() < 18) && (
+                                <div className="space-y-4 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-2xl border-2 border-blue-100 dark:border-blue-900/20">
+                                    <h4 className="text-[9px] font-black uppercase text-blue-600 flex items-center gap-2"><Users size={12}/> Dados do Responsável (Menores)</h4>
+                                    <input type="text" placeholder="NOME DO RESPONSÁVEL" className="w-full px-4 py-3 bg-white dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none border border-blue-100" value={registrationForm.responsible_name} onChange={e => setRegistrationForm({...registrationForm, responsible_name: e.target.value.toUpperCase()})} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <input type="date" placeholder="DATA NASC. RESPONSÁVEL" className="w-full px-4 py-3 bg-white dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none border border-blue-100" value={registrationForm.responsible_birth_date} onChange={e => setRegistrationForm({...registrationForm, responsible_birth_date: e.target.value})} />
+                                        <input type="text" placeholder="PARENTESCO" className="w-full px-4 py-3 bg-white dark:bg-zinc-800 rounded-xl text-[10px] font-black outline-none border border-blue-100" value={registrationForm.relationship} onChange={e => setRegistrationForm({...registrationForm, relationship: e.target.value.toUpperCase()})} />
+                                    </div>
+                                </div>
+                              )}
+
+                              <div className="pt-2">
+                                  <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Senha de Acesso</label>
+                                  <input type="password" placeholder={loginContext === 'PURCHASE' ? "OPCIONAL" : "MÍNIMO 4 DÍGITOS"} className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-800 rounded-xl text-sm font-black outline-none border-2 border-indigo-400" value={registrationForm.password} onChange={e => setRegistrationForm({...registrationForm, password: e.target.value})} />
+                              </div>
+                              <button 
+                                onClick={handleRegisterPassenger} 
+                                className={`w-full py-4 ${loginContext === 'PURCHASE' ? 'bg-indigo-600' : 'bg-slate-900'} text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 disabled:opacity-50`}
+                                disabled={isRecharging}
+                              >
+                                {isRecharging ? <Loader2 className="animate-spin mx-auto"/> : loginContext === 'PURCHASE' ? 'Próximo: Escolher Poltrona' : 'Concluir Cadastro'}
+                              </button>
+                              <button onClick={() => setIsRegistering(false)} className="w-full text-[9px] font-black text-slate-400 uppercase">Já tenho cadastro</button>
+                          </div>
+                      ) : isRegisteringPassword ? (
                           <div className="space-y-6">
                               <p className="text-[10px] font-black uppercase text-slate-400 text-center">Cadastre uma senha</p>
                               <div className="space-y-4">
-                                  <input type="password" placeholder="NOVA SENHA" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black uppercase" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
-                                  <input type="password" placeholder="CONFIRMAR SENHA" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black uppercase" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
+                                  <input type="password" placeholder="NOVA SENHA" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black" value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+                                  <input type="password" placeholder="CONFIRMAR SENHA" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} />
                               </div>
                               <button onClick={handleRegisterPassword} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs">Cadastrar</button>
                           </div>
                       ) : (
                           <div className="space-y-6">
                               <div className="space-y-4">
-                                  <input type="text" placeholder="CPF OU CARTÃO" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black uppercase" value={loginIdentifier} onChange={e => setLoginIdentifier(cpfMask(e.target.value))} />
-                                  <input type="password" placeholder="SENHA" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black uppercase" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
+                                  <input type="text" placeholder="CPF OU CARTÃO" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black" value={loginIdentifier} onChange={e => setLoginIdentifier(cpfMask(e.target.value))} />
+                                  <input type="password" placeholder="SENHA" className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl text-xs font-black" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} />
                               </div>
-                              <button onClick={handleCardLogin} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs">Entrar</button>
+                              <button onClick={handleCardLogin} className={`w-full py-4 ${loginContext === 'PURCHASE' ? 'bg-indigo-600' : 'bg-slate-900'} text-white rounded-2xl font-black uppercase text-xs shadow-xl`}>Entrar</button>
+                              {loginContext === 'PURCHASE' ? (
+                                  <button onClick={() => setIsRegistering(true)} className="w-full text-[9px] font-black text-slate-400 uppercase border-t dark:border-zinc-800 pt-4">Não tem cadastro? Clique para cadastrar e comprar</button>
+                              ) : (
+                                  <div className="pt-4 border-t dark:border-zinc-800 text-center">
+                                      <p className="text-[10px] font-black text-slate-400 uppercase italic">Cadastro disponível apenas em ATMs ou SAC Presencial</p>
+                                  </div>
+                              )}
                           </div>
                       )}
                   </div>
@@ -349,11 +559,19 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                   </div>
                   <div className="flex-1 overflow-y-auto p-8 space-y-8 flex flex-col items-center">
                       <TransportCard name={`${loggedInCard.name} ${loggedInCard.surname}`} cardNumber={loggedInCard.card_number} photoUrl={loggedInCard.photo_url} category={loggedInCard.type.toUpperCase()} />
-                      <div className="w-full grid grid-cols-2 gap-4">
-                          <div className="p-6 bg-slate-50 dark:bg-zinc-800 rounded-[2rem] border-2 border-slate-100 dark:border-zinc-700 text-center">
-                              <p className="text-[10px] font-black text-slate-400 uppercase">Saldo</p>
-                              <p className="text-3xl font-black">R$ {loggedInCard.balance.toFixed(2)}</p>
-                          </div>
+                      <div className="w-full">
+                          {isGuest ? (
+                              <div className="p-6 bg-blue-50 dark:bg-blue-900/10 rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/20 text-center">
+                                  <p className="text-[10px] font-black text-blue-500 uppercase">Acesso de Passageiro</p>
+                                  <p className="text-sm font-black mt-2">Você está identificado para realizar sua compra.</p>
+                                  <p className="text-[10px] text-slate-400 mt-2 uppercase italic text-center">Perfil temporário para compra de passagem</p>
+                              </div>
+                          ) : (
+                              <div className="p-6 bg-slate-50 dark:bg-zinc-800 rounded-[2rem] border-2 border-slate-100 dark:border-zinc-700 text-center">
+                                  <p className="text-[10px] font-black text-slate-400 uppercase">Saldo do Cartão</p>
+                                  <p className="text-3xl font-black">R$ {loggedInCard.balance.toFixed(2)}</p>
+                              </div>
+                          )}
                       </div>
                   </div>
                </div>
@@ -385,7 +603,7 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
            <div className="flex gap-2">
                 <button onClick={toggleNotifications} className={`p-2 rounded-xl ${notificationsEnabled ? 'bg-slate-900 text-yellow-400' : 'bg-slate-900/10'}`}><SmartphoneNfc size={18}/></button>
                 <button onClick={toggleTheme} className="p-2 bg-slate-900/10 rounded-xl">{isDarkMode ? <Sun size={18}/> : <Moon size={18}/>}</button>
-                <button onClick={() => setShowCardLogin(true)} className={`p-2 rounded-xl ${isCardLoggedIn ? 'bg-emerald-500 text-white' : 'bg-slate-900/10'}`}><CreditCard size={18}/></button>
+                <button onClick={() => { setShowCardLogin(true); setLoginContext('GENERAL'); }} className={`p-2 rounded-xl ${isCardLoggedIn ? 'bg-emerald-500 text-white' : 'bg-slate-900/10'}`}><CreditCard size={18}/></button>
                 <button onClick={onExit} className="px-3 py-1 bg-slate-900/10 rounded-xl text-[10px] font-black uppercase">Sair</button>
            </div>
         </div>
@@ -484,7 +702,24 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                                           <p className="text-[10px] font-black uppercase text-slate-400 mb-2 border-b dark:border-zinc-700 pb-1">{group.label}</p>
                                           <div className="flex flex-wrap gap-2">
                                               {filteredTimes.length > 0 ? filteredTimes.map((t, tidx) => (
-                                                  <span key={tidx} className="px-3 py-1 bg-white dark:bg-zinc-700 rounded-lg text-[10px] font-black border border-slate-200 dark:border-zinc-600">{t.time}</span>
+                                                  <button 
+                                                    key={tidx} 
+                                                    onClick={() => {
+                                                        if (!isCardLoggedIn) {
+                                                            setLoginContext('PURCHASE');
+                                                            setShowCardLogin(true);
+                                                            addToast("Para comprar este horário, faça login ou cadastre-se.", "info");
+                                                        } else {
+                                                            onOpenTicketing(undefined, isGuest ? loggedInCard : undefined, selectedRouteDetails.id);
+                                                        }
+                                                    }}
+                                                    className="group relative px-4 py-2 bg-indigo-600 dark:bg-indigo-500 rounded-xl text-[10px] font-black text-white hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95"
+                                                  >
+                                                    {t.time}
+                                                    <div className="w-px h-3 bg-white/20 mx-1"></div>
+                                                    <span className="uppercase text-[8px]">Comprar</span>
+                                                    <ShoppingCart size={12} className="text-white/70"/>
+                                                  </button>
                                               )) : <span className="text-[8px] italic text-slate-400">Sem horários para esta direção</span>}
                                           </div>
                                       </div>
@@ -493,10 +728,8 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                           </div>
                       </div>
                   </div>
-                  <div className="p-6 bg-slate-50 dark:bg-zinc-900 border-t dark:border-zinc-800 flex gap-3 shrink-0">
-                      <button onClick={() => {setSelectedRouteDetails(null); onOpenTicketing();}} className="flex-1 py-4 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors">
-                        <ShoppingCart size={16}/> Comprar Passagem
-                      </button>
+                  <div className="p-6 bg-slate-50 dark:bg-zinc-900 border-t dark:border-zinc-800 flex flex-col gap-2 shrink-0">
+                      <p className="text-[9px] font-black uppercase text-slate-400 text-center italic">Escolha um horário acima para comprar sua passagem</p>
                   </div>
               </div>
           </div>
@@ -528,9 +761,20 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                             </div>
                         </div>
 
-                        <div className="bg-slate-900 p-8 rounded-[2.5rem] border-4 border-yellow-400 text-center space-y-4">
+                        <div className="bg-slate-900 p-8 rounded-[2.5rem] border-4 border-indigo-400 text-center space-y-4">
+                            <div className="w-16 h-16 bg-white/10 rounded-3xl mx-auto flex items-center justify-center mb-2">
+                                <Ticket size={32} className="text-indigo-400" />
+                            </div>
                             <h3 className="text-white font-black uppercase italic">Bilhete Digital</h3>
-                            <button onClick={onOpenTicketing} className="w-full py-4 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2"><ShoppingCart size={18}/> Comprar Passagem</button>
+                            <button 
+                                onClick={() => {
+                                    setActiveTab('routes');
+                                    addToast("Primeiro, escolha uma linha e horário de sua preferência.", "info");
+                                }} 
+                                className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 shadow-xl"
+                            >
+                                Escolher Rota e Horário
+                            </button>
                         </div>
 
                         <div className="grid gap-4">

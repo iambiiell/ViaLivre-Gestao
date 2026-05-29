@@ -208,7 +208,7 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
     job_title: '', role: 'DRIVER',
     work_municipality_id: '',
     login_acesso: '', senha_acesso: '',
-    work_shift_type: '6x1', daily_hours_target: '00:00',
+    work_shift_type: '6x1', daily_hours_target: '08:00',
     standard_clock_in: '00:00', standard_clock_out: '00:00',
     standard_interval: '00:00',
     saturday_clock_in: '00:00', saturday_clock_out: '00:00',
@@ -352,6 +352,15 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
 
     const payload = { ...formData, role } as User;
     
+    // daily_hours_target validation
+    if (payload.daily_hours_target) {
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        if (!timeRegex.test(payload.daily_hours_target)) {
+            alert("Formato de Carga Horária Diária Meta inválido. Use HH:MM.");
+            return;
+        }
+    }
+    
     if (editingId) onUpdateDriver({ ...payload, id: editingId });
     else onAddDriver({ ...payload, id: `user-${Date.now()}` });
     
@@ -406,6 +415,12 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
                               <Timer size={12} className="text-yellow-600" />
                               <span className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-tight">Escala: {driver.work_shift_type || '6x1'}</span>
                           </div>
+                          {driver.license_validity && new Date(driver.license_validity) < new Date() && (
+                              <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-red-600 text-white animate-pulse shadow-sm">
+                                  <AlertTriangle size={12} />
+                                  <span className="text-[9px] font-black uppercase tracking-tight">CNH Vencida</span>
+                              </div>
+                          )}
                           {(() => {
                               const points = userFines
                                 .filter(f => f.user_id === driver.id && f.status !== 'RECURSO')

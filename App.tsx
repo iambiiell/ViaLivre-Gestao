@@ -1,6 +1,6 @@
 
 import React, { Component, useState, useEffect, useCallback, ErrorInfo, ReactNode, useRef } from 'react';
-import { Loader2, BusFront, X, AlertTriangle, CheckCircle2, Coffee, Sparkles, AlertCircle, RefreshCw, Zap } from 'lucide-react';
+import { Loader2, BusFront, X, AlertTriangle, CheckCircle2, Coffee, Sparkles, AlertCircle, RefreshCw, Zap, ChevronRight, Home } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Topbar from './components/Sidebar'; 
 import Dashboard from './components/Dashboard';
@@ -40,7 +40,7 @@ import SubscriptionManager from './components/SubscriptionManager';
 import LicenseManagement from './components/LicenseManagement';
 import UserSubscription from './components/UserSubscription';
 import SubscriptionExpired from './components/SubscriptionExpired';
-import { ViewState, BusRoute, Trip, User, Company, Vehicle, IssueReport, City, Notice, ThemeMode, TicketSale, Inspection, TicketingConfig, RoleConfig, AppNotification, Shift, SystemSettings, UserFine, Subscription, Skin, TimeEntry } from './types';
+import { ViewState, BusRoute, Trip, User, Company, Vehicle, IssueReport, City, Notice, ThemeMode, TicketSale, Inspection, TicketingConfig, RoleConfig, AppNotification, Shift, SystemSettings, UserFine, Subscription, Skin, TimeEntry, TicketBooth } from './types';
 import { db, supabase, TableName } from './services/database';
 
 export type ToastType = 'success' | 'error' | 'warning';
@@ -99,7 +99,229 @@ const DEFAULT_CONFIG: TicketingConfig = {
   class_seats: { 'CONVENCIONAL': 44, 'CONVENCIONAL_DD': 64, 'EXECUTIVO': 42, 'EXECUTIVO_DD': 56, 'LEITO': 28, 'LEITO_DD': 36, 'SEMI_LEITO': 32, 'SEMI_LEITO_DD': 44, 'URBANO': 44, 'CAMA': 18 }
 };
 
+const ViewContent: React.FC<{ 
+  currentView: ViewState | string; 
+  commonProps: any;
+  handleAction: (action: any, table: any, data: any) => Promise<any>;
+}> = ({ currentView, commonProps, handleAction }) => {
+  const { 
+    currentUser, routes, trips, users, companies, vehicles, reports, cities, notices, 
+    inspections, ticketingConfig, addToast, roleConfigs, importUserData, setImportUserData,
+    notificationMetadata, setNotificationMetadata, handleNotificationClick, loadInitialData, userFines, systemSettings, skins, shifts, notifications,
+    handleSendSystemNotification, setCurrentView
+  } = commonProps;
+
+  const renderContent = () => {
+    switch (currentView) {
+      case 'dashboard': return <Dashboard {...commonProps} allTrips={trips} />;
+      case 'drivers': 
+        return <DriverManager 
+          {...commonProps} 
+          drivers={users} 
+          roleConfigs={roleConfigs} 
+          registrationPattern={systemSettings?.registration_pattern} 
+          registrationTemplate={systemSettings?.registration_template} 
+          initialUserData={importUserData}
+          onClearInitialData={() => setImportUserData(null)}
+          onAddDriver={u => {
+            handleAction('create', 'users', u);
+            setImportUserData(null);
+          }} 
+          onUpdateDriver={u => handleAction('update', 'users', u)} 
+          onDeleteDriver={id => handleAction('delete', 'users', id)} 
+          userFines={userFines}
+          onAddFine={(v) => handleAction('create', 'user_fines', v)}
+        />;
+      case 'companies': return <CompanyManager {...commonProps} onAddCompany={c => handleAction('create', 'companies', c)} onUpdateCompany={c => handleAction('update', 'companies', c)} onDeleteCompany={id => handleAction('delete', 'companies', id)} onAddBooth={b => handleAction('create', 'ticket_booths', b)} onUpdateBooth={b => handleAction('update', 'ticket_booths', b)} onDeleteBooth={id => handleAction('delete', 'ticket_booths', id)} />;
+      case 'routes': return <RouteManager {...commonProps} trips={trips} onAddRoute={r => handleAction('create', 'routes', r)} onUpdateRoute={r => handleAction('update', 'routes', r)} onDeleteRoute={id => handleAction('delete', 'routes', id)} />;
+      case 'schedule': return <TripSchedule {...commonProps} drivers={users} onAddTrip={t => handleAction('create', 'trips', t)} onUpdateTrip={t => handleAction('update', 'trips', t)} onDeleteTrip={id => handleAction('delete', 'trips', id)} onSendSMS={handleSendSystemNotification} userFines={userFines} />;
+      case 'users': 
+        return <UserManager 
+          {...commonProps} 
+          companies={companies}
+          roleConfigs={roleConfigs} 
+          initialUserData={importUserData}
+          onClearInitialData={() => setImportUserData(null)}
+          onAddUser={u => {
+            handleAction('create', 'users', u);
+            setImportUserData(null);
+          }} 
+          onUpdateUser={u => handleAction('update', 'users', u)} 
+          onDeleteUser={id => handleAction('delete', 'users', id)} 
+        />;
+      case 'vehicles': return <VehicleManager {...commonProps} onAddVehicle={v => handleAction('create', 'vehicles', v)} onUpdateVehicle={v => handleAction('update', 'vehicles', v)} onDeleteVehicle={id => handleAction('delete', 'vehicles', id)} skins={skins} />;
+      case 'observations': return <ObservationManager {...commonProps} initialOccurrenceId={notificationMetadata?.occurrenceId} onResolveReport={(id, metadata) => handleAction('update', 'occurrences', { id, status: 'Concluído', technician_report: metadata })} onDeleteReport={id => handleAction('delete', 'occurrences', id)} />;
+      case 'cities': return <CityManager {...commonProps} onAddCity={c => handleAction('create', 'cities', c)} onUpdateCity={c => handleAction('update', 'cities', c)} onDeleteCity={id => handleAction('delete', 'cities', id)} />;
+      case 'notices': return <NoticeManager {...commonProps} onAddNotice={n => handleAction('create', 'notices', n)} onDeleteNotice={id => handleAction('delete', 'notices', id)} />;
+      case 'reports-view': return <ReportManager {...commonProps} onDeleteTrip={id => handleAction('delete', 'trips', id)} />;
+      case 'maintenance': return <MaintenanceManager {...commonProps} />;
+      case 'ticketing': return <TicketAgentInterface 
+        {...commonProps} 
+        onExit={() => setCurrentView(notificationMetadata?.isPassengerTicketing ? 'passenger-view' : 'dashboard')} 
+        initialTripId={notificationMetadata?.trip_id} 
+        initialRouteId={notificationMetadata?.route_id}
+        initialPassengerData={notificationMetadata?.passengerData}
+        isPassengerView={notificationMetadata?.isPassengerTicketing}
+      />;
+      case 'inspections': return <InspectionManager {...commonProps} onAddInspection={i => handleAction('create', 'driver_logs', i)} onDeleteInspection={id => handleAction('delete', 'driver_logs', id)} />;
+      case 'ticketing-config': return <TicketingConfigManager initialConfig={ticketingConfig} onUpdateConfig={c => handleAction('update', 'ticketing_config', c)} addToast={addToast} />;
+      case 'time-tracking': return <TimeTrackingManager currentUser={currentUser} addToast={addToast} />;
+      case 'payroll': return <PayrollManager users={users} companies={companies} addToast={addToast} />;
+      case 'management': return <ManagementView addToast={addToast} currentUser={currentUser} />;
+      case 'shifts': return <DriverShiftManager shifts={shifts} drivers={users} routes={routes} onAddShift={s => handleAction('create', 'shifts', s)} onUpdateShift={s => handleAction('update', 'shifts', s)} onDeleteShift={id => handleAction('delete', 'shifts', id)} />;
+      case 'notifications': 
+        return <NotificationManager 
+          notifications={notifications} 
+          currentUser={currentUser}
+          addToast={addToast} 
+          onRefresh={loadInitialData} 
+          onNotificationClick={handleNotificationClick}
+        />;
+      case 'dispatcher': return <DispatcherManager currentUser={currentUser} addToast={addToast} />;
+      case 'sac': return <SACManager addToast={addToast} />;
+      case 'license-management': 
+        if (!currentUser?.is_full_admin) return <Dashboard {...commonProps} allTrips={trips} />;
+        return <LicenseManagement currentUser={currentUser} addToast={addToast} />;
+      case 'subscriptions':
+        return <SubscriptionManager currentUser={currentUser} addToast={addToast} />;
+      case 'my-subscription': return <UserSubscription currentUser={currentUser} addToast={addToast} />;
+      case 'system-config': return <SystemConfigManager roleConfigs={roleConfigs} onUpdateRoleConfig={rc => handleAction('update', 'role_configs', rc)} addToast={addToast} />;
+      case 'skins': return <SkinRepository currentUser={currentUser} companies={companies} skins={skins} />;
+      case 'recruitment': 
+        return <RecruitmentPanel 
+          addToast={addToast} 
+          currentUser={currentUser}
+          initialApplicationId={notificationMetadata?.applicationId}
+          onImportToCollaborators={(userData) => {
+            setImportUserData(userData);
+            setCurrentView('drivers');
+          }}
+        />;
+      case 'driver-view': return <DriverView {...commonProps} onUpdateTrip={t => handleAction('update', 'trips', t)} />;
+      case 'monitoring': return <OperationTabs {...commonProps} initialTab="OVERVIEW" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
+      case 'operation-center': return <OperationTabs {...commonProps} onUpdateTrip={t => handleAction('update', 'trips', t)} />;
+      case 'traffic-violations': return <TrafficViolationManager userFines={userFines} drivers={users} vehicles={vehicles} onAddViolation={v => handleAction('create', 'user_fines', v)} onDeleteViolation={id => handleAction('delete', 'user_fines', id)} onUpdateViolation={v => handleAction('update', 'user_fines', v)} />;
+      case 'work-with-us': return <JobApplicationForm addToast={addToast} currentUser={currentUser} onSuccess={() => setCurrentView('dashboard')} />;
+      case 'driver-urban': return <DriverView {...commonProps} forcedRole="URBANO" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
+      case 'driver-road': return <DriverView {...commonProps} forcedRole="RODOVIARIO" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
+      case 'conductor': return <DriverView {...commonProps} forcedRole="COBRADOR" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
+      case 'passenger-view': return <PassengerInterface {...commonProps} onExit={() => setCurrentView('dashboard')} onOpenTicketing={(tripId, passengerData, routeId) => {
+        setNotificationMetadata(prev => ({ 
+          ...prev, 
+          trip_id: tripId, 
+          route_id: routeId,
+          passengerData: passengerData,
+          isPassengerTicketing: true
+        }));
+        setCurrentView('ticketing');
+      }} />;
+      case 'about': return (
+        <div className="bg-white dark:bg-zinc-900 p-12 rounded-[3rem] border border-slate-100 dark:border-zinc-800 shadow-sm transition-colors">
+          <div className="max-w-2xl mx-auto text-center">
+              <div className="logo-sistema w-24 h-24 bg-yellow-400 rounded-[2rem] mx-auto mb-8 flex items-center justify-center shadow-xl border-4 border-slate-900 overflow-hidden transition-all">
+                {systemSettings?.system_logo ? (
+                  <img 
+                    src={`${systemSettings.system_logo.split('?')[0]}?t=${Date.now()}`} 
+                    className="h-full w-auto object-contain" 
+                    alt={systemSettings?.system_name || "ViaLivre Gestão"} 
+                    referrerPolicy="no-referrer" 
+                  />
+                ) : (
+                  <span className="text-4xl font-black italic text-slate-900">{(systemSettings?.system_name?.[0] || 'V').toUpperCase()}</span>
+                )}
+              </div>
+              <h2 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-zinc-100 uppercase italic tracking-tighter mb-4">
+                {systemSettings?.system_name || 'ViaLivre Gestão'}
+              </h2>
+              <p className="text-slate-500 dark:text-zinc-400 font-bold uppercase tracking-widest text-[10px] mb-12">Sistema Integrado de Gestão de Transportes</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700">
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Versão do Sistema</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-zinc-100">v3.5.2 Pro</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700">
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Desenvolvedor</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-zinc-100">ViaLivre Gestão</p>
+                </div>
+                <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700 md:col-span-2">
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Suporte Técnico</p>
+                  <a href={`mailto:${systemSettings?.support_email || 'suporte@vialivre.com.br'}`} className="text-lg font-black text-slate-900 dark:text-zinc-100 hover:text-yellow-600 transition-colors uppercase">{systemSettings?.support_email || 'suporte@vialivre.com.br'}</a>
+                </div>
+              </div>
+          </div>
+        </div>
+      );
+      default: return null;
+    }
+  };
+
+  const getViewLabel = (view: string) => {
+    const labels: Record<string, string> = {
+      'dashboard': 'Dashboard',
+      'operation-center': 'Centro Operacional',
+      'monitoring': 'Monitoramento',
+      'management': 'Gestão Global',
+      'routes': 'Itinerários',
+      'schedule': 'Escala de Viagens',
+      'users': 'Controle de Acessos',
+      'companies': 'Empresas',
+      'vehicles': 'Frota de Ônibus',
+      'drivers': 'Colaboradores',
+      'ticketing': 'Guichê de Vendas',
+      'sac': 'Vale Transporte',
+      'notices': 'Mural de Avisos',
+      'observations': 'Ocorrências',
+      'inspections': 'Vistorias',
+      'maintenance': 'Manutenção',
+      'cities': 'Municípios',
+      'reports-view': 'Relatórios',
+      'payroll': 'Holerites',
+      'time-tracking': 'Ponto Eletrônico',
+      'ticketing-config': 'Gestão Guichê',
+      'dispatcher': 'Despachante',
+      'recruitment': 'Recrutamento',
+      'work-with-us': 'Trabalhe Conosco',
+      'about': 'Sobre o Sistema'
+    };
+    return labels[view] || view;
+  };
+
+  return (
+    <div className="flex flex-col w-full h-full">
+      {/* Breadcrumb Section */}
+      <div className="px-10 py-4 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-zinc-600 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-sm border-b border-slate-100 dark:border-zinc-900 transition-colors">
+        <button onClick={() => setCurrentView('dashboard')} className="hover:text-yellow-600 flex items-center gap-1.5 transition-colors">
+          <Home size={12} /> Home
+        </button>
+        {currentView !== 'dashboard' && (
+          <>
+            <ChevronRight size={10} className="text-slate-300 dark:text-zinc-800" />
+            <span className="text-slate-900 dark:text-white">{getViewLabel(currentView as string)}</span>
+          </>
+        )}
+      </div>
+
+      <div className="flex-1">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentView as string}
+            initial={{ opacity: 0, y: 10, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 1.02 }}
+            transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+            className="w-full h-full"
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
+
   console.log('App component rendered');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isPassengerMode, setIsPassengerMode] = useState(false);
@@ -123,6 +345,7 @@ const App: React.FC = () => {
   const [cities, setCities] = useState<City[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [ticketBooths, setTicketBooths] = useState<TicketBooth[]>([]);
   const [ticketingConfig, setTicketingConfig] = useState<TicketingConfig | null>(DEFAULT_CONFIG);
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -246,8 +469,8 @@ const App: React.FC = () => {
   const loadInitialData = useCallback(async () => {
     console.log('loadInitialData called');
     try {
-      const [r, t, u, c, v, rep, cit, n, insp, cfg, roles, notifs, sfts, settings, fines, subs, skns, tt] = await Promise.allSettled([
-        db.getRoutes(), db.getTrips(), db.getUsers(), db.getCompanies(), db.getVehicles(), db.getReports(), db.getCities(), db.getNotices(), db.getInspections(), db.getTicketingConfig(), db.getRoleConfigs(), db.getNotifications(), db.getShifts(), db.getSystemSettings(), db.getUserFines(), db.getSubscriptions(), db.getSkins(), db.fetchAll<TimeEntry>('time_tracking' as any)
+      const [r, t, u, c, v, rep, cit, n, insp, cfg, roles, notifs, sfts, settings, fines, subs, skns, tt, booths] = await Promise.allSettled([
+        db.getRoutes(), db.getTrips(), db.getUsers(), db.getCompanies(), db.getVehicles(), db.getReports(), db.getCities(), db.getNotices(), db.getInspections(), db.getTicketingConfig(), db.getRoleConfigs(), db.getNotifications(), db.getShifts(), db.getSystemSettings(), db.getUserFines(), db.getSubscriptions(), db.getSkins(), db.fetchAll<TimeEntry>('time_tracking' as any), db.getTicketBooths()
       ]);
       
       if (r.status === 'fulfilled') setRoutes(r.value || []);
@@ -259,6 +482,7 @@ const App: React.FC = () => {
       if (cit.status === 'fulfilled') setCities(cit.value || []);
       if (n.status === 'fulfilled') setNotices(n.value || []);
       if (insp.status === 'fulfilled') setInspections(insp.value || []);
+      if (booths.status === 'fulfilled') setTicketBooths(booths.value || []);
       if (cfg.status === 'fulfilled' && cfg.value && cfg.value.length > 0) setTicketingConfig(cfg.value[0]);
       if (roles.status === 'fulfilled') {
         const roleData = roles.value || [];
@@ -380,6 +604,7 @@ const App: React.FC = () => {
           }
           break;
         case 'inspections': setInspections(syncList); break;
+        case 'ticket_booths': setTicketBooths(syncList); break;
         case 'traffic_violations': setUserFines(syncList); break;
         case 'user_fines': setUserFines(syncList); break;
         case 'notifications': setNotifications(syncList); break;
@@ -459,7 +684,7 @@ const App: React.FC = () => {
       const currentTimeStr = now.toTimeString().split(' ')[0].substring(0, 5); // HH:mm
 
       // Find today's shift
-      const todayShift = shifts.find(s => s.user_id === currentUser.id && s.date === today);
+      const todayShift = shifts.find(s => s.driver_id === currentUser.id && s.date === today);
       if (!todayShift) return;
 
       // Find today's time entry
@@ -764,10 +989,16 @@ const App: React.FC = () => {
           companies={companies} 
           cities={cities}
           currentUser={null} 
-          ticketingConfig={null} 
-          onExit={() => setShowPassengerTicketing(false)} 
+          ticketingConfig={ticketingConfig} 
+          onExit={() => {
+            setShowPassengerTicketing(false);
+            setNotificationMetadata(null);
+          }} 
           addToast={addToast} 
           isPassengerView={true}
+          initialTripId={notificationMetadata?.trip_id}
+          initialRouteId={notificationMetadata?.route_id}
+          initialPassengerData={notificationMetadata?.passengerData}
         />
       );
     }
@@ -781,7 +1012,14 @@ const App: React.FC = () => {
         vehicles={vehicles} 
         addToast={addToast} 
         onExit={() => setIsPassengerMode(false)} 
-        onOpenTicketing={() => setShowPassengerTicketing(true)}
+        onOpenTicketing={(tripId, passengerData, routeId) => {
+          setNotificationMetadata({
+            trip_id: tripId,
+            passengerData: passengerData,
+            route_id: routeId
+          });
+          setShowPassengerTicketing(true);
+        }}
       />
     );
   }
@@ -799,6 +1037,37 @@ const App: React.FC = () => {
   if (isSubscriptionExpired()) {
     return <SubscriptionExpired onLogout={() => handleSetUser(null)} />;
   }
+
+  const commonProps = { 
+    routes, 
+    trips, 
+    users, 
+    companies, 
+    vehicles, 
+    reports, 
+    cities, 
+    notices, 
+    currentUser, 
+    inspections, 
+    ticketingConfig, 
+    addToast, 
+    subscription, 
+    skins, 
+    systemSettings, 
+    onUpdateSettings: (s: any) => handleAction('update', 'system_settings', s),
+    userFines,
+    roleConfigs,
+    shifts,
+    notifications,
+    loadInitialData,
+    handleNotificationClick,
+    handleSendSystemNotification,
+    importUserData,
+    setImportUserData,
+    setCurrentView,
+    notificationMetadata,
+    setNotificationMetadata
+  };
 
   return (
     <ErrorBoundary>
@@ -823,187 +1092,9 @@ const App: React.FC = () => {
           systemSettings={systemSettings} 
         />
         
-        <motion.main 
-          key={currentView}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          className={`w-full ${isMobile ? 'pt-20 px-4' : 'pt-24 px-8'} h-full transition-all pb-44 md:pb-24`}
-        >
-            {(() => {
-                    const commonProps = { routes, trips, users, companies, vehicles, reports, cities, notices, currentUser, inspections, ticketingConfig, addToast, subscription, skins, systemSettings, onUpdateSettings: (s: any) => handleAction('update', 'system_settings', s) };
-                    switch (currentView) {
-                    case 'dashboard': return <Dashboard {...commonProps} allTrips={trips} />;
-                    case 'management': return <ManagementView addToast={addToast} currentUser={currentUser} />;
-                    case 'skins': return <SkinRepository currentUser={currentUser} companies={companies} skins={skins} />;
-                    case 'notifications': 
-                      return <NotificationManager 
-                        notifications={notifications} 
-                        currentUser={currentUser}
-                        addToast={addToast} 
-                        onRefresh={loadInitialData} 
-                        onNotificationClick={handleNotificationClick}
-                      />;
-                    case 'shifts': return <DriverShiftManager shifts={shifts} drivers={users} routes={routes} onAddShift={s => handleAction('create', 'shifts', s)} onUpdateShift={s => handleAction('update', 'shifts', s)} onDeleteShift={id => handleAction('delete', 'shifts', id)} />;
-                    case 'reports-view': return <ReportManager {...commonProps} onDeleteTrip={id => handleAction('delete', 'trips', id)} />;
-                    case 'time-tracking': return <TimeTrackingManager currentUser={currentUser} addToast={addToast} />;
-                    case 'payroll': return <PayrollManager users={users} companies={companies} addToast={addToast} />;
-                    case 'ticketing': return <TicketAgentInterface {...commonProps} onExit={() => setCurrentView('dashboard')} initialTripId={notificationMetadata?.trip_id} />;
-                    case 'ticketing-config': return <TicketingConfigManager initialConfig={ticketingConfig} onUpdateConfig={c => handleAction('update', 'ticketing_config', c)} addToast={addToast} />;
-                    case 'inspections': return <InspectionManager {...commonProps} onAddInspection={i => handleAction('create', 'driver_logs', i)} onDeleteInspection={id => handleAction('delete', 'driver_logs', id)} />;
-                    case 'maintenance': return <MaintenanceManager {...commonProps} />;
-                    case 'driver-view': return <DriverView {...commonProps} onUpdateTrip={t => handleAction('update', 'trips', t)} />;
-                    case 'traffic-violations': return <TrafficViolationManager userFines={userFines} drivers={users} vehicles={vehicles} onAddViolation={v => handleAction('create', 'user_fines', v)} onDeleteViolation={id => handleAction('delete', 'user_fines', id)} onUpdateViolation={v => handleAction('update', 'user_fines', v)} />;
-                    case 'schedule': return <TripSchedule {...commonProps} drivers={users} onAddTrip={t => handleAction('create', 'trips', t)} onUpdateTrip={t => handleAction('update', 'trips', t)} onDeleteTrip={id => handleAction('delete', 'trips', id)} onSendSMS={handleSendSystemNotification} userFines={userFines} />;
-                    case 'routes': return <RouteManager {...commonProps} onAddRoute={r => handleAction('create', 'routes', r)} onUpdateRoute={r => handleAction('update', 'routes', r)} onDeleteRoute={id => handleAction('delete', 'routes', id)} />;
-                    case 'drivers': 
-                      return <DriverManager 
-                        {...commonProps} 
-                        drivers={users} 
-                        roleConfigs={roleConfigs} 
-                        registrationPattern={systemSettings?.registration_pattern} 
-                        registrationTemplate={systemSettings?.registration_template} 
-                        initialUserData={importUserData}
-                        onClearInitialData={() => setImportUserData(null)}
-                        onAddDriver={u => {
-                          handleAction('create', 'users', u);
-                          setImportUserData(null);
-                        }} 
-                        onUpdateDriver={u => handleAction('update', 'users', u)} 
-                        onDeleteDriver={id => handleAction('delete', 'users', id)} 
-                        userFines={userFines}
-                        onAddFine={(v) => handleAction('create', 'user_fines', v)}
-                      />;
-                    case 'companies': return <CompanyManager {...commonProps} onAddCompany={c => handleAction('create', 'companies', c)} onUpdateCompany={c => handleAction('update', 'companies', c)} onDeleteCompany={id => handleAction('delete', 'companies', id)} />;
-                    case 'users': 
-                      return <UserManager 
-                        {...commonProps} 
-                        companies={companies}
-                        roleConfigs={roleConfigs} 
-                        initialUserData={importUserData}
-                        onClearInitialData={() => setImportUserData(null)}
-                        onAddUser={u => {
-                          handleAction('create', 'users', u);
-                          setImportUserData(null);
-                        }} 
-                        onUpdateUser={u => handleAction('update', 'users', u)} 
-                        onDeleteUser={id => handleAction('delete', 'users', id)} 
-                      />;
-                    case 'vehicles': return <VehicleManager {...commonProps} onAddVehicle={v => handleAction('create', 'vehicles', v)} onUpdateVehicle={v => handleAction('update', 'vehicles', v)} onDeleteVehicle={id => handleAction('delete', 'vehicles', id)} skins={skins} />;
-                    case 'observations': return <ObservationManager {...commonProps} initialOccurrenceId={notificationMetadata?.occurrenceId} onResolveReport={(id, metadata) => handleAction('update', 'occurrences', { id, status: 'Concluído', technician_report: metadata })} onDeleteReport={id => handleAction('delete', 'occurrences', id)} />;
-                    case 'cities': return <CityManager {...commonProps} onAddCity={c => handleAction('create', 'cities', c)} onUpdateCity={c => handleAction('update', 'cities', c)} onDeleteCity={id => handleAction('delete', 'cities', id)} />;
-                    case 'notices': return <NoticeManager {...commonProps} onAddNotice={n => handleAction('create', 'notices', n)} onDeleteNotice={id => handleAction('delete', 'notices', id)} />;
-                    case 'system-config': return <SystemConfigManager roleConfigs={roleConfigs} onUpdateRoleConfig={rc => handleAction('update', 'role_configs', rc)} addToast={addToast} />;
-                    case 'dispatcher': return <DispatcherManager currentUser={currentUser} addToast={addToast} />;
-                    case 'sac': return <SACManager addToast={addToast} />;
-                    case 'subscriptions': 
-                      const isMasterEmail = currentUser?.email === 'suporte@vialivre.com.br' || currentUser?.email === 'consorcio.imperial.ltda@gmail.com';
-                      if (!currentUser?.is_full_admin && !isMasterEmail) return <Dashboard {...commonProps} allTrips={trips} />;
-                      return <SubscriptionManager currentUser={currentUser} addToast={addToast} />;
-                    case 'my-subscription':
-                      return <UserSubscription currentUser={currentUser} addToast={addToast} />;
-                    case 'license-management': 
-                      if (!currentUser?.is_full_admin) return <Dashboard {...commonProps} allTrips={trips} />;
-                      return <LicenseManagement currentUser={currentUser} addToast={addToast} />;
-                    case 'work-with-us': return <JobApplicationForm addToast={addToast} currentUser={currentUser} onSuccess={() => setCurrentView('dashboard')} />;
-                    case 'recruitment': 
-                      return <RecruitmentPanel 
-                        addToast={addToast} 
-                        currentUser={currentUser}
-                        initialApplicationId={notificationMetadata?.applicationId}
-                        onImportToCollaborators={(userData) => {
-                          setImportUserData(userData);
-                          setCurrentView('drivers');
-                        }}
-                      />;
-                    case 'about': return (
-                      <div className="bg-white dark:bg-zinc-900 p-12 rounded-[3rem] border border-slate-100 dark:border-zinc-800 shadow-sm transition-colors">
-                        <div className="max-w-2xl mx-auto text-center">
-                          <div className="logo-sistema w-24 h-24 bg-yellow-400 rounded-[2rem] mx-auto mb-8 flex items-center justify-center shadow-xl border-4 border-slate-900 overflow-hidden transition-all">
-                            {systemSettings?.system_logo ? (
-                              <img 
-                                src={`${systemSettings.system_logo.split('?')[0]}?t=${Date.now()}`} 
-                                className="h-full w-auto object-contain" 
-                                alt={systemSettings?.system_name || "ViaLivre Gestão"} 
-                                referrerPolicy="no-referrer" 
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display = 'none';
-                                  const parent = (e.target as HTMLImageElement).parentElement;
-                                  if (parent) {
-                                    const span = document.createElement('span');
-                                    span.className = 'text-4xl font-black italic text-slate-900';
-                                    span.innerText = (systemSettings?.system_name?.[0] || 'V').toUpperCase();
-                                    parent.appendChild(span);
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <span className="text-4xl font-black italic text-slate-900">{(systemSettings?.system_name?.[0] || 'V').toUpperCase()}</span>
-                            )}
-                          </div>
-                          <h2 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-zinc-100 uppercase italic tracking-tighter mb-4">
-                            {systemSettings?.system_name?.includes('Viação Nicolau S/A') || systemSettings?.system_name?.includes('Grupo D\'Rio') || systemSettings?.system_name?.includes('ViaLivre') ? 'ViaLivre Gestão' : (systemSettings?.system_name || 'ViaLivre Gestão')}
-                          </h2>
-                          <p className="text-slate-500 dark:text-zinc-400 font-bold uppercase tracking-widest text-[10px] mb-12">Sistema Integrado de Gestão de Transportes</p>
-                          
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                            <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700">
-                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Versão do Sistema</p>
-                              <p className="text-lg font-black text-slate-900 dark:text-zinc-100">v1.5.0</p>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700">
-                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Desenvolvedor</p>
-                              <p className="text-lg font-black text-slate-900 dark:text-zinc-100">ViaLivre Gestão</p>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700 md:col-span-2">
-                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Suporte Técnico</p>
-                              <a href={`mailto:${systemSettings?.support_email || 'suporte@vialivre.com.br'}`} className="text-lg font-black text-slate-900 dark:text-zinc-100 hover:text-yellow-600 transition-colors">{systemSettings?.support_email || 'suporte@vialivre.com.br'}</a>
-                            </div>
-                            <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700 md:col-span-2">
-                              <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Telefone de Contato</p>
-                              <a href={`https://wa.me/55${systemSettings?.support_phone?.replace(/\D/g, '') || '21995421447'}`} target="_blank" rel="noopener noreferrer" className="text-lg font-black text-slate-900 dark:text-zinc-100 hover:text-yellow-600 transition-colors">{systemSettings?.support_phone || '(21) 9 9542-1447'}</a>
-                            </div>
-                            
-                            <div className="md:col-span-2 pt-4">
-                              <button 
-                                onClick={() => {
-                                  const link = document.createElement('a');
-                                  link.href = 'https://github.com/vialivre/vialivre-desktop/releases/download/v1.5.0/ViaLivre_Setup_v1.5.0.exe'; 
-                                  link.download = 'ViaLivre Gestão.exe';
-                                  document.body.appendChild(link);
-                                  link.click();
-                                  document.body.removeChild(link);
-                                  addToast("Iniciando download do ViaLivre Gestão Desktop...", "success");
-                                }}
-                                className="w-full bg-slate-900 dark:bg-zinc-100 text-white dark:text-slate-900 py-6 rounded-[2rem] font-black uppercase text-xs tracking-widest shadow-xl flex items-center justify-center gap-3 hover:scale-[1.02] active:scale-95 transition-all group"
-                              >
-                                <motion.div
-                                  animate={{ y: [0, -3, 0] }}
-                                  transition={{ repeat: Infinity, duration: 1.5 }}
-                                >
-                                  <BusFront size={20} className="text-yellow-400" />
-                                </motion.div>
-                                Baixar Sistema para Desktop
-                              </button>
-                              <p className="text-[8px] text-slate-400 font-bold uppercase text-center mt-3 tracking-widest">Compatível com Windows 10/11</p>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-12 pt-12 border-t border-slate-100 dark:border-zinc-800">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">© 2026 {systemSettings?.system_name?.includes('Viação Nicolau S/A') || systemSettings?.system_name?.includes('Grupo D\'Rio') || systemSettings?.system_name?.includes('ViaLivre') ? 'ViaLivre Gestão' : (systemSettings?.system_name || 'ViaLivre Gestão')} • Todos os direitos reservados</p>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                    case 'operation-center': return <OperationTabs {...commonProps} onUpdateTrip={t => handleAction('update', 'trips', t)} />;
-                    case 'driver-urban': return <DriverView {...commonProps} forcedRole="URBANO" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
-                    case 'driver-road': return <DriverView {...commonProps} forcedRole="RODOVIARIO" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
-                    case 'conductor': return <DriverView {...commonProps} forcedRole="COBRADOR" onUpdateTrip={t => handleAction('update', 'trips', t)} />;
-                    case 'passenger-view': return <PassengerInterface {...commonProps} onExit={() => setCurrentView('dashboard')} />;
-                    default: return null;
-                    }
-                })()}
-            </motion.main>
+        <main key={currentView} className={`w-full ${isMobile ? 'pt-20 px-4' : 'pt-24 px-8'} h-full transition-all pb-44 md:pb-24`}>
+          <ViewContent currentView={currentView as ViewState} commonProps={commonProps} handleAction={handleAction} />
+        </main>
 
         <div className="fixed top-20 right-4 z-[300] flex flex-col gap-3 max-w-[90vw] pointer-events-none">
           <AnimatePresence>
@@ -1089,17 +1180,17 @@ const App: React.FC = () => {
                       Período de Teste Quase Expirado!
                     </h2>
                     <p className="text-xs font-bold text-slate-500 leading-relaxed">
-                      Sua licença de teste gratuito de 7 dias expira em breve (6º dia). Para continuar gerenciando sua frota sem interrupções e manter seus dados salvos, você deve adquirir uma assinatura.
+                      Sua licença de teste gratuito de 7 dias expira em breve (6º dia). Para continuar gerenciando sua frota e manter seus dados salvos, você deve adquirir uma assinatura.
                     </p>
                   </div>
 
-                  <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-2xl border border-red-100 dark:border-red-900/50">
-                    <div className="flex items-center justify-center gap-3 text-red-600 dark:text-red-400 mb-1">
-                      <AlertCircle size={18} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">Aviso Crítico</span>
+                  <div className="bg-red-50 dark:bg-red-900/20 p-6 rounded-[2rem] border-2 border-red-100 dark:border-red-900/50 shadow-inner">
+                    <div className="flex items-center justify-center gap-3 text-red-600 dark:text-red-400 mb-2">
+                      <AlertCircle size={20} className="animate-pulse" />
+                      <span className="text-xs font-black uppercase tracking-widest">Atenção: Ação Irreversível</span>
                     </div>
-                    <p className="text-[10px] text-red-500/80 font-bold leading-tight uppercase text-center">
-                      Caso opte por NÃO, TODOS os dados cadastrados serão apagados.
+                    <p className="text-[11px] text-red-600 dark:text-red-400 font-black leading-tight uppercase text-center bg-white/50 dark:bg-black/20 p-3 rounded-xl border border-red-200 dark:border-red-800">
+                      CASO SELECCIONE "NÃO", TODOS OS SEUS DADOS (VEÍCULOS, LINHAS, CLIENTES, VENDAS) SERÃO APAGADOS DEFINITIVAMENTE DO BANCO DE DADOS AGORA.
                     </p>
                   </div>
 

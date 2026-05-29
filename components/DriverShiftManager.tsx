@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { User, Shift, BusRoute } from '../types';
 import { Calendar, User as UserIcon, Plus, Clock, MapPin, Save, Trash2, AlertCircle, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface DriverShiftManagerProps {
   shifts: Shift[];
@@ -30,6 +31,11 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
   }, [shifts, filterDate]);
 
   const availableDrivers = useMemo(() => drivers.filter(d => d.role === 'DRIVER'), [drivers]);
+
+  const handleDateChange = (date: string) => {
+    if (!editingShift) return;
+    setEditingShift({ ...editingShift, date });
+  };
 
   const handleSave = () => {
     if (!editingShift?.driver_id || !editingShift?.route_id || !editingShift?.start_time || !editingShift?.end_time || !editingShift?.date) {
@@ -74,6 +80,15 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
       return;
     }
 
+    // daily_hours_target validation
+    if (editingShift?.daily_hours_target) {
+        const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        if (!timeRegex.test(editingShift.daily_hours_target)) {
+            addToast("Formato de Meta de Horas Diárias inválido. Use HH:MM.", "error");
+            return;
+        }
+    }
+
     if (editingShift.id) {
       onUpdateShift(editingShift as Shift);
     } else {
@@ -103,7 +118,23 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
               className="px-6 py-3 bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-slate-400 rounded-xl font-black uppercase text-[10px] tracking-widest outline-none border-2 border-transparent focus:border-yellow-400 transition-all"
             />
             <button 
-              onClick={() => { setEditingShift({ date: filterDate, start_time: '00:00', end_time: '00:00' }); setIsModalOpen(true); }}
+              onClick={() => { 
+                setEditingShift({ 
+                  date: filterDate, 
+                  start_time: '00:00', 
+                  end_time: '00:00',
+                  standard_interval: '00:00',
+                  saturday_clock_in: '00:00',
+                  saturday_clock_out: '00:00',
+                  saturday_interval: '00:00',
+                  sunday_clock_in: '00:00',
+                  sunday_clock_out: '00:00',
+                  sunday_interval: '00:00',
+                  daily_hours_target: '08:00',
+                  scale_type: '6x1'
+                }); 
+                setIsModalOpen(true); 
+              }}
               className="px-6 py-3 bg-yellow-400 text-slate-900 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-lg border-2 border-slate-900 active:scale-95 transition-all flex items-center gap-2"
             >
               <Plus size={18} /> Novo Turno
@@ -176,18 +207,31 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
       </div>
 
       {/* MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 z-[200] flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in duration-300">
-          <div className="bg-white dark:bg-zinc-950 w-full max-w-lg rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-8 border-b dark:border-zinc-800 bg-slate-900 flex justify-between items-center text-white">
-              <div>
-                <h3 className="text-xl font-black uppercase italic tracking-tighter">{editingShift?.id ? 'Editar Turno' : 'Novo Turno'}</h3>
-                <p className="text-[9px] font-black text-yellow-400 uppercase mt-1">Escala de Trabalho</p>
+      <AnimatePresence>
+        {isModalOpen && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsModalOpen(false)}
+              className="absolute inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white dark:bg-zinc-950 w-full max-w-lg rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden flex flex-col max-h-[90vh] relative z-10"
+            >
+              <div className="p-8 border-b dark:border-zinc-800 bg-slate-900 flex justify-between items-center text-white">
+                <div>
+                  <h3 className="text-xl font-black uppercase italic tracking-tighter">{editingShift?.id ? 'Editar Turno' : 'Novo Turno'}</h3>
+                  <p className="text-[9px] font-black text-yellow-400 uppercase mt-1">Escala de Trabalho</p>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="p-3 bg-white/10 rounded-2xl hover:bg-red-500 transition-colors"><X size={24}/></button>
               </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-3 bg-white/10 rounded-2xl hover:bg-red-500 transition-colors"><X size={24}/></button>
-            </div>
-            
-            <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
+              
+              <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Motorista *</label>
@@ -213,35 +257,103 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Início *</label>
-                    <input 
-                      type="time" 
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold outline-none focus:border-yellow-400 dark:text-white transition-all"
-                      value={editingShift?.start_time || ''}
-                      onChange={e => setEditingShift({...editingShift, start_time: e.target.value})}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Fim *</label>
-                    <input 
-                      type="time" 
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold outline-none focus:border-yellow-400 dark:text-white transition-all"
-                      value={editingShift?.end_time || ''}
-                      onChange={e => setEditingShift({...editingShift, end_time: e.target.value})}
-                    />
-                  </div>
-                </div>
-
                 <div>
                   <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Data *</label>
                   <input 
                     type="date" 
                     className="w-full px-5 py-4 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold outline-none focus:border-yellow-400 dark:text-white transition-all"
                     value={editingShift?.date || ''}
-                    onChange={e => setEditingShift({...editingShift, date: e.target.value})}
+                    onChange={e => handleDateChange(e.target.value)}
                   />
+                </div>
+
+                <div className="pt-4 border-t dark:border-zinc-800">
+                  <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Tipo de Escala</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {['6x1', '5x1', '5x2', '12x36', 'Custom'].map(type => (
+                      <button
+                        key={type}
+                        onClick={() => setEditingShift({...editingShift, scale_type: type})}
+                        className={`py-3 rounded-xl font-black text-[10px] uppercase transition-all border-2 ${
+                          editingShift?.scale_type === type 
+                            ? 'bg-yellow-400 border-slate-900 text-slate-900' 
+                            : 'bg-slate-50 dark:bg-zinc-900 border-slate-100 dark:border-zinc-800 text-slate-400'
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t dark:border-zinc-800">
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-2">Dias Úteis</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Entrada</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.start_time || '00:00'} onChange={e => setEditingShift({...editingShift, start_time: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Saída</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.end_time || '00:00'} onChange={e => setEditingShift({...editingShift, end_time: e.target.value})} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Intervalo</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.standard_interval || '00:00'} onChange={e => setEditingShift({...editingShift, standard_interval: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-2">Sábado</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Entrada</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.saturday_clock_in || '00:00'} onChange={e => setEditingShift({...editingShift, saturday_clock_in: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Saída</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.saturday_clock_out || '00:00'} onChange={e => setEditingShift({...editingShift, saturday_clock_out: e.target.value})} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Intervalo</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.saturday_interval || '00:00'} onChange={e => setEditingShift({...editingShift, saturday_interval: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 md:col-span-2">
+                    <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest border-b border-slate-200 dark:border-zinc-800 pb-2">Domingo / Feriados</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Entrada</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.sunday_clock_in || '00:00'} onChange={e => setEditingShift({...editingShift, sunday_clock_in: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Saída</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.sunday_clock_out || '00:00'} onChange={e => setEditingShift({...editingShift, sunday_clock_out: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Intervalo</label>
+                        <input type="time" className="w-full px-3 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-xl font-bold outline-none focus:border-yellow-400" value={editingShift?.sunday_interval || '00:00'} onChange={e => setEditingShift({...editingShift, sunday_interval: e.target.value})} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t dark:border-zinc-800 col-span-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase ml-2 mb-1 block">Meta de Horas Diárias (HH:MM) *</label>
+                    <div className="relative">
+                      <Clock className="absolute left-4 top-4 text-slate-400" size={18}/>
+                      <input 
+                        type="time"
+                        className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold outline-none focus:border-yellow-400 dark:text-white transition-all"
+                        value={editingShift?.daily_hours_target || '08:00'}
+                        onChange={e => setEditingShift({...editingShift, daily_hours_target: e.target.value})}
+                      />
+                    </div>
+                    <p className="text-[8px] text-slate-400 mt-2 italic font-bold uppercase tracking-widest pl-2">Padrão sugerido: 08:00</p>
+                  </div>
                 </div>
               </div>
 
@@ -252,9 +364,10 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
                 <Save size={20}/> Salvar Turno
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 };

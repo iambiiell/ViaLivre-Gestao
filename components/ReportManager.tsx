@@ -1,9 +1,12 @@
 
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Trip, BusRoute, Company, User, PassengerDetails, TicketSale, IssueReport, DriverLog } from '../types';
-import { FileText, Search, Building2, UserCircle, Download, Printer, TrendingUp, DollarSign, X, Clock, MapPin, Bus, ShieldAlert, CheckCircle2, AlertTriangle, ArrowRight, Wallet, History, Users, Loader2, Calendar, ClipboardList, Wrench, BarChart as BarChartIcon } from 'lucide-react';
+import { FileText, Search, Building2, UserCircle, Download, Printer, TrendingUp, DollarSign, X, Clock, MapPin, Bus, ShieldAlert, CheckCircle2, AlertTriangle, ArrowRight, Wallet, History, Users, Loader2, Calendar, ClipboardList, Wrench, BarChart as BarChartIcon, LayoutGrid } from 'lucide-react';
 import { db } from '../services/database';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts';
+import SchedulePoster from './SchedulePoster';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 declare const html2pdf: any;
 
@@ -33,10 +36,11 @@ const formatDateTimeBr = (dateStr: string) => {
 };
 
 const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], companies = [], users = [], currentUser, onDeleteTrip }) => {
-  const [activeTab, setActiveTab] = useState<'revenue' | 'daily-logs' | 'maintenance'>('revenue');
+  const [activeTab, setActiveTab] = useState<'revenue' | 'daily-logs' | 'maintenance' | 'schedules'>('revenue');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDate, setFilterDate] = useState<string>('');
   const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null);
+  const [selectedRouteId, setSelectedRouteId] = useState<string>('');
   const [tripSales, setTripSales] = useState<TicketSale[]>([]);
   const [tripIssues, setTripIssues] = useState<IssueReport[]>([]);
   const [dailyLogs, setDailyLogs] = useState<DriverLog[]>([]);
@@ -50,6 +54,89 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
   const [allTicketSales, setAllTicketSales] = useState<TicketSale[]>([]);
   const detailedReportRef = useRef<HTMLDivElement>(null);
   const dossierRef = useRef<HTMLDivElement>(null);
+
+  // States and Refs for Current Active Tab Export to PDF
+  const [isExportingPDF, setIsExportingPDF] = useState(false);
+  const tabRevenueRef = useRef<HTMLDivElement>(null);
+  const tabDailyLogsRef = useRef<HTMLDivElement>(null);
+  const tabMaintenanceRef = useRef<HTMLDivElement>(null);
+  const tabSchedulesRef = useRef<HTMLDivElement>(null);
+
+  const getActiveRef = () => {
+    switch (activeTab) {
+      case 'revenue': return tabRevenueRef;
+      case 'daily-logs': return tabDailyLogsRef;
+      case 'maintenance': return tabMaintenanceRef;
+      case 'schedules': return tabSchedulesRef;
+      default: return null;
+    }
+  };
+
+  const handleExportTabToPDF = async () => {
+    const activeRef = getActiveRef();
+    if (!activeRef || !activeRef.current) {
+        alert("Nenhum conteúdo para exportar nessa aba.");
+        return;
+    }
+    
+    setIsExportingPDF(true);
+    try {
+        const element = activeRef.current;
+        const isDark = document.documentElement.classList.contains('dark');
+        
+        const canvas = await html2canvas(element, {
+            scale: 2, // High resolution crisp output
+            useCORS: true,
+            logging: false,
+            backgroundColor: isDark ? '#18181b' : '#ffffff' // zinc-900 or white
+        });
+        
+        const imgData = canvas.toDataURL('image/png');
+        
+        // Define orientations: landscape for schedules (usually wide), portrait for tables (tall lists)
+        const landscape = canvas.width > canvas.height;
+        const pdf = new jsPDF({
+            orientation: landscape ? 'landscape' : 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        
+        const margin = 10; // 10mm margins
+        const contentWidth = pdfWidth - (margin * 2);
+        const contentHeight = (canvas.height * contentWidth) / canvas.width;
+        
+        let heightLeft = contentHeight;
+        let position = margin;
+        
+        pdf.addImage(imgData, 'PNG', margin, position, contentWidth, contentHeight);
+        heightLeft -= (pdfHeight - margin * 2);
+        
+        while (heightLeft > 0) {
+            position = heightLeft - contentHeight + margin;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', margin, position, contentWidth, contentHeight);
+            heightLeft -= (pdfHeight - margin * 2);
+        }
+        
+        const tabLabels: Record<string, string> = {
+            'revenue': 'Receita_e_Faturamento',
+            'daily-logs': 'Diario_de_Bordo',
+            'maintenance': 'Ocorrencias_e_Manutencao',
+            'schedules': 'Quadro_de_Horarios'
+        };
+        const activeLabel = tabLabels[activeTab] || activeTab;
+        
+        pdf.save(`relatorio_${activeLabel}_${new Date().toISOString().split('T')[0]}.pdf`);
+    } catch (e) {
+        console.error("Erro ao exportar PDF:", e);
+        alert("Houve um erro técnico ao gerar o arquivo PDF.");
+    } finally {
+        setIsExportingPDF(false);
+    }
+  };
 
   useEffect(() => {
     const handleCloseAll = () => {
@@ -339,6 +426,9 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
                 <button onClick={() => setActiveTab('maintenance')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${activeTab === 'maintenance' ? 'bg-yellow-400 text-slate-900 shadow-md' : 'bg-slate-100 dark:bg-zinc-800 text-slate-400'}`}>
                     <Wrench size={14}/> Manutenção
                 </button>
+                <button onClick={() => setActiveTab('schedules')} className={`px-6 py-3 rounded-xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${activeTab === 'schedules' ? 'bg-yellow-400 text-slate-900 shadow-md' : 'bg-slate-100 dark:bg-zinc-800 text-slate-400'}`}>
+                    <LayoutGrid size={14}/> Quadro de Horários
+                </button>
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
@@ -361,12 +451,29 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
                         onChange={e => setFilterDate(e.target.value)}
                     />
                 </div>
+                <button
+                    onClick={handleExportTabToPDF}
+                    disabled={isExportingPDF}
+                    className="px-6 py-4 bg-red-600 hover:bg-red-750 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-xl hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-55"
+                >
+                    {isExportingPDF ? (
+                        <>
+                            <Loader2 size={16} className="animate-spin" />
+                            <span>Exportando...</span>
+                        </>
+                    ) : (
+                        <>
+                            <Download size={16} />
+                            <span>Exportar PDF Aba</span>
+                        </>
+                    )}
+                </button>
             </div>
         </div>
       </div>
 
       {activeTab === 'revenue' && (
-          <>
+          <div ref={tabRevenueRef} className="space-y-6 animate-in fade-in">
             <div className="flex overflow-x-auto pb-4 gap-4 snap-x snap-mandatory md:grid md:grid-cols-3 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
                 <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border dark:border-zinc-800 shadow-sm flex items-center justify-between h-full">
@@ -419,11 +526,11 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
                     </tbody>
                 </table>
             </div>
-          </>
+          </div>
       )}
 
       {activeTab === 'daily-logs' && (
-          <div className="bg-white dark:bg-zinc-950 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden transition-colors">
+          <div ref={tabDailyLogsRef} className="bg-white dark:bg-zinc-950 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden transition-colors animate-in fade-in">
               <table className="w-full text-left text-[10px]">
                   <thead className="bg-slate-50 dark:bg-zinc-800 font-black uppercase text-slate-400 dark:text-zinc-500">
                       <tr>
@@ -470,7 +577,7 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
       )}
 
       {activeTab === 'maintenance' && (
-          <div className="bg-white dark:bg-zinc-950 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden transition-colors">
+          <div ref={tabMaintenanceRef} className="bg-white dark:bg-zinc-950 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden transition-colors animate-in fade-in">
               <table className="w-full text-left text-[10px]">
                   <thead className="bg-slate-50 dark:bg-zinc-800 font-black uppercase text-slate-400 dark:text-zinc-500">
                       <tr>
@@ -500,6 +607,38 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
                       )}
                   </tbody>
               </table>
+          </div>
+      )}
+
+      {activeTab === 'schedules' && (
+          <div ref={tabSchedulesRef} className="space-y-8 animate-in fade-in">
+             <div className="bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] border dark:border-zinc-800 shadow-sm transition-colors">
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-4 ml-2">Selecione o Itinerário para Gerar o Poster</label>
+                <select 
+                  className="w-full max-w-md px-6 py-4 bg-slate-50 dark:bg-zinc-800 border-2 border-yellow-400 rounded-2xl font-black text-xs transition-all dark:text-white"
+                  value={selectedRouteId}
+                  onChange={e => setSelectedRouteId(e.target.value)}
+                >
+                  <option value="">Selecione uma linha...</option>
+                  {routes.map(r => (
+                    <option key={r.id} value={r.id}>{r.prefixo_linha} - {r.origin} / {r.destination}</option>
+                  ))}
+                </select>
+             </div>
+
+             {selectedRouteId ? (
+               <SchedulePoster 
+                 route={routes.find(r => r.id === selectedRouteId)!} 
+                 trips={trips.filter(t => t.route_id === selectedRouteId)} 
+               />
+             ) : (
+               <div className="p-20 text-center bg-slate-50 dark:bg-zinc-900/50 rounded-[3rem] border-2 border-dashed border-slate-200 dark:border-zinc-800 transition-colors">
+                 <LayoutGrid className="mx-auto text-slate-200 dark:text-zinc-800 mb-6" size={80} />
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
+                   Selecione uma linha acima para visualizar o quadro de horários<br/>no padrão oficial de terminal rodoviário.
+                 </p>
+               </div>
+             )}
           </div>
       )}
 

@@ -2,7 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { User, UserRole, RoleConfig, Company } from '../types';
 import { VIEW_LABELS } from '../constants';
-import { UserCircle, Pencil, X, Trash2, ArrowUpDown, UserPlus, Mail, Phone, Shield, KeyRound, UserCheck, Briefcase, Building2, Search, Save, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { UserCircle, Pencil, X, Trash2, ArrowUpDown, UserPlus, Mail, Phone, Shield, KeyRound, UserCheck, Briefcase, Building2, Search, Save, AlertCircle, Eye, EyeOff, MapPin } from 'lucide-react';
+import { phoneMask, cpfMask, cepMask } from '../utils/masks';
 
 interface UserManagerProps {
   users: User[];
@@ -261,8 +262,43 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
                         </select>
                     </div>
                     <div>
-                        <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">Foto de Perfil (URL)</label>
+                        <label className="block text-[9px] font-black text-black dark:text-white uppercase mb-1 ml-2">Foto de Perfil (URL)</label>
                         <input className={inputClass('photo_url')} value={formData.photo_url || ''} onChange={e => setFormData({...formData, photo_url: e.target.value})} placeholder="https://..." />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-[9px] font-black text-black dark:text-white uppercase mb-1 ml-2">Telefone / WhatsApp</label>
+                        <input className={inputClass('phone')} value={formData.phone || ''} onChange={e => setFormData({...formData, phone: phoneMask(e.target.value)})} placeholder="(00) 0 0000-0000" />
+                    </div>
+                    <div>
+                        <label className="block text-[9px] font-black text-black dark:text-white uppercase mb-1 ml-2">CPF</label>
+                        <input className={inputClass('cpf')} value={formData.cpf || ''} onChange={e => setFormData({...formData, cpf: cpfMask(e.target.value)})} placeholder="000.000.000-00" />
+                    </div>
+                </div>
+
+                <div className="space-y-4 p-6 bg-slate-50 dark:bg-zinc-900 rounded-2xl border border-slate-100 dark:border-zinc-800">
+                    <h4 className="text-[10px] font-black uppercase text-blue-600 mb-2 flex items-center gap-2"><MapPin size={12} /> Endereço Residencial</h4>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="col-span-1">
+                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">CEP</label>
+                            <input className={inputClass('cep')} value={formData.cep || ''} onChange={e => setFormData({...formData, cep: cepMask(e.target.value)})} placeholder="00000-000" />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Logradouro</label>
+                            <input className={inputClass('address_street')} value={formData.address_street || ''} onChange={e => setFormData({...formData, address_street: e.target.value})} placeholder="Rua, Av..." />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Nº</label>
+                            <input className={inputClass('address_number')} value={formData.address_number || ''} onChange={e => setFormData({...formData, address_number: e.target.value})} placeholder="123" />
+                        </div>
+                        <div className="col-span-3">
+                            <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Bairro</label>
+                            <input className={inputClass('address_neighborhood')} value={formData.address_neighborhood || ''} onChange={e => setFormData({...formData, address_neighborhood: e.target.value})} placeholder="Centro" />
+                        </div>
                     </div>
                 </div>
 
@@ -308,7 +344,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
                   </div>
                 )}
 
-                {(currentUser?.is_full_admin || !users.some(u => u.is_full_admin)) && (
+                {currentUser?.email === 'via.nicolau.sa@gmail.com' && (
                   <div className="flex items-center gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-2xl border border-yellow-100 dark:border-yellow-900/30">
                     <input 
                       type="checkbox" 

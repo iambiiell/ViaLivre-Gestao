@@ -778,9 +778,19 @@ const DailyLogManager: React.FC<DailyLogManagerProps> = ({
                                     type="number" 
                                     value={odometerEnd || ''} 
                                     onChange={e => setOdometerEnd(e.target.value === '' ? '' : Number(e.target.value))}
-                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl font-bold outline-none focus:border-yellow-400 transition-all dark:text-white"
+                                    onBlur={() => {
+                                        if (odometerStart !== '' && odometerEnd !== '' && Number(odometerEnd) < Number(odometerStart)) {
+                                            addToast(`Atenção: KM Final (${odometerEnd}) menor que Inicial (${odometerStart})`, "warning");
+                                        }
+                                    }}
+                                    className={`w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-zinc-800 border-2 rounded-2xl font-bold outline-none transition-all dark:text-white ${odometerStart !== '' && odometerEnd !== '' && Number(odometerEnd) < Number(odometerStart) ? 'border-red-500 animate-shake' : 'border-slate-200 dark:border-zinc-700 focus:border-yellow-400'}`}
                                     placeholder="000000"
                                 />
+                                {odometerStart !== '' && (
+                                    <p className="text-[9px] font-black uppercase text-slate-400 mt-2 ml-2 tracking-widest">
+                                        KM Inicial (Saída): <span className="text-indigo-500">{odometerStart}</span>
+                                    </p>
+                                )}
                             </div>
                         </div>
                         {isUrbanVehicle && (

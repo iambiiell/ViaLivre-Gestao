@@ -13,6 +13,7 @@ interface OperationTabsProps {
   currentUser: User | null;
   onUpdateTrip: (trip: Trip) => void;
   addToast: (message: string, type?: 'success' | 'white' | 'error') => void;
+  initialTab?: 'URBANO' | 'RODOVIARIO' | 'COBRADOR' | 'OVERVIEW';
 }
 
 const OperationTabs: React.FC<OperationTabsProps> = (props) => {
@@ -36,14 +37,15 @@ const OperationTabs: React.FC<OperationTabsProps> = (props) => {
   }, [currentUser]);
 
   const [activeTab, setActiveTab] = useState<'URBANO' | 'RODOVIARIO' | 'COBRADOR' | 'OVERVIEW'>(
-    (currentUser?.role === 'ADMIN' || (currentUser?.job_title || '').toUpperCase().includes('ADMINISTRADOR')) ? 'OVERVIEW' : (userBaseRole as any)
+    props.initialTab || ((currentUser?.role === 'ADMIN' || (currentUser?.job_title || '').toUpperCase().includes('ADMINISTRADOR')) ? 'OVERVIEW' : (userBaseRole as any))
   );
 
   const availableTabs = useMemo(() => {
     const tabs = [];
     const isAdmin = currentUser?.role === 'ADMIN' || (currentUser?.job_title || '').toUpperCase().includes('ADMINISTRADOR');
+    const hasMonitoringPermission = currentUser?.permissions?.includes('monitoring');
 
-    if (isAdmin) {
+    if (isAdmin || hasMonitoringPermission) {
       tabs.push({ id: 'OVERVIEW', label: 'Monitoramento', icon: PlayCircle });
     }
     if (isAdmin || userBaseRole === 'URBANO') {

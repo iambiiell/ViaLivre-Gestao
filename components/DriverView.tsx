@@ -404,6 +404,11 @@ const DriverView: React.FC<DriverViewProps> = ({
       
       {/* Header de Boas-vindas */}
       <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] border-4 border-yellow-400 shadow-2xl relative overflow-hidden">
+        {currentUser?.license_validity && new Date(currentUser.license_validity) < new Date() && (
+            <div className="absolute top-4 right-4 bg-red-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase animate-pulse shadow-lg flex items-center gap-2 z-20">
+                <AlertTriangle size={14} /> CNH VENCIDA
+            </div>
+        )}
         <div className="relative z-10">
           <p className="text-[10px] font-black uppercase tracking-[0.4em] text-yellow-400 mb-2">Painel do Colaborador - {currentUser?.role === 'ADMIN' ? 'ADMINISTRADOR' : (currentUser?.job_title || 'Motorista')}</p>
           <h2 className="text-3xl font-black uppercase italic tracking-tighter mb-1">Olá, {currentUser?.full_name?.split(' ')[0]}</h2>
