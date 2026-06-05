@@ -40,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     { id: 'maintenance', label: 'MANUTENÇÃO', icon: Wrench },
     { id: 'companies', label: 'EMPRESAS', icon: Building2 },
     { id: 'cities', label: 'MUNICÍPIOS', icon: MapPin },
+    { id: 'bus-stations', label: 'RODOVIÁRIAS', icon: Building2 },
     { id: 'routes', label: 'ITINERÁRIOS', icon: Map },
     { id: 'schedule', label: 'ESCALA DE VIAGENS', icon: Calendar },
     { id: 'dispatcher', label: 'DESPACHANTE', icon: ShieldCheck, accessKey: 'access_dispatcher' },
@@ -80,10 +81,10 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     }
 
     if (item.id === 'my-subscription') {
-      return currentUser?.role === 'ADMIN';
+      return userRole === 'ADMIN';
     }
 
-    if (currentUser?.role === 'ADMIN') return true;
+    if (userRole === 'ADMIN') return true;
     
     // Check role-based access booleans
     if (userRoleConfig && (item as any).accessKey) {
@@ -110,6 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
       'maintenance': ['ADMIN', 'MECHANIC'],
       'companies': ['ADMIN'],
       'cities': ['ADMIN'],
+      'bus-stations': ['ADMIN'],
       'routes': ['ADMIN'],
       'schedule': ['ADMIN', 'FISCAL', 'DRIVER', 'CONDUCTOR', 'Motorista Urbano', 'Motorista Rodoviário', 'Cobrador', 'URBANO', 'RODOVIARIO', 'COBRADOR'],
       'shifts': ['ADMIN', 'RH'],
@@ -122,7 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
       'work-with-us': ['ADMIN', 'RH', 'FISCAL', 'TICKET_AGENT', 'DRIVER', 'CONDUCTOR', 'MECHANIC', 'Motorista Urbano', 'Motorista Rodoviário', 'Cobrador', 'URBANO', 'RODOVIARIO', 'COBRADOR'],
       'notifications': ['ADMIN', 'RH', 'FISCAL', 'MECHANIC', 'TICKET_AGENT', 'DRIVER', 'CONDUCTOR', 'Motorista Urbano', 'Motorista Rodoviário', 'Cobrador', 'URBANO', 'RODOVIARIO', 'COBRADOR']
     };
-    return legacyRoles[item.id]?.includes(currentUser?.role || '') || false;
+    return legacyRoles[item.id]?.includes(userRole) || false;
   }).sort((a, b) => {
     // Custom sort: dashboard first, then operation-center, about last, others alphabetical
     if (a.id === 'dashboard') return -1;
@@ -293,6 +295,29 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
                   Modo Escuro
                 </button>
               </div>
+            </div>
+
+            {/* Accessibility Options */}
+            <div>
+              <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Acessibilidade</label>
+              <button 
+                type="button" 
+                onClick={() => {
+                  if (systemSettings && onUpdateSettings) {
+                    onUpdateSettings({ ...systemSettings, high_contrast: !systemSettings.high_contrast });
+                  }
+                }}
+                className={`p-4 rounded-xl border-2 font-black uppercase text-[10px] tracking-wider transition-all flex items-center justify-between w-full ${systemSettings?.high_contrast ? 'border-yellow-400 bg-yellow-400/10 text-slate-950 dark:text-yellow-400 font-black' : 'border-slate-100 dark:border-zinc-800 text-slate-400 hover:border-slate-200 bg-transparent'}`}
+              >
+                <span className="flex items-center gap-2 font-black">
+                  <span className="w-4 h-4 rounded-full border-2 border-current bg-transparent flex items-center justify-center text-[8px] font-black">A</span>
+                  Alto Contraste
+                </span>
+                <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${systemSettings?.high_contrast ? 'bg-yellow-400 text-slate-950 border border-slate-950' : 'bg-slate-100 dark:bg-zinc-800 text-slate-400'}`}>
+                  {systemSettings?.high_contrast ? 'Ativado' : 'Desativado'}
+                </span>
+              </button>
+              <p className="mt-2 text-[8px] font-bold text-slate-400 uppercase italic leading-tight ml-2">Melhora a legibilidade do sistema para motoristas em ambientes externos sob luz solar direta.</p>
             </div>
 
             {/* Accent Color Palette Selector */}

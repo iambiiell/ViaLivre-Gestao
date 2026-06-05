@@ -73,6 +73,15 @@ export interface RouteSection {
   letreiro_velocidade?: number;
 }
 
+export interface BusStation {
+  id: string;
+  system_id?: string;
+  name: string;
+  address: string;
+  platforms: string;
+  created_at?: string;
+}
+
 export interface BusRoute {
   id: string;
   system_id?: string;
@@ -80,6 +89,10 @@ export interface BusRoute {
   prefixo_linha: string;
   origin: string;
   destination: string;
+  origin_station_id?: string;
+  destination_station_id?: string;
+  origin_station_platform?: string;
+  destination_station_platform?: string;
   departure_point?: string;
   price: number;
   toll?: number;
@@ -240,7 +253,7 @@ export interface AppNotification {
   metadata?: any;
 }
 
-export type ViewState = 'dashboard' | 'routes' | 'schedule' | 'drivers' | 'companies' | 'users' | 'vehicles' | 'observations' | 'cities' | 'notices' | 'reports-view' | 'maintenance' | 'ticketing' | 'inspections' | 'ticketing-config' | 'time-tracking' | 'payroll' | 'management' | 'shifts' | 'notifications' | 'dispatcher' | 'sac' | 'work-with-us' | 'recruitment' | 'about' | 'skins' | 'subscriptions' | 'license-management' | 'my-subscription' | 'system-config' | 'driver-view' | 'passenger-view' | 'driver-urban' | 'driver-road' | 'conductor' | 'operation-center' | 'monitoring';
+export type ViewState = 'dashboard' | 'routes' | 'schedule' | 'drivers' | 'companies' | 'users' | 'vehicles' | 'observations' | 'cities' | 'notices' | 'reports-view' | 'maintenance' | 'ticketing' | 'inspections' | 'ticketing-config' | 'time-tracking' | 'payroll' | 'management' | 'shifts' | 'notifications' | 'dispatcher' | 'sac' | 'work-with-us' | 'recruitment' | 'about' | 'skins' | 'subscriptions' | 'license-management' | 'my-subscription' | 'system-config' | 'driver-view' | 'passenger-view' | 'driver-urban' | 'driver-road' | 'conductor' | 'operation-center' | 'monitoring' | 'bus-stations';
 
 export interface ActivationKey {
   id: string;
@@ -618,6 +631,7 @@ export interface SystemSettings {
   system_url?: string;
   theme_color?: string;
   maintenance_intervals?: { [vehicleType: string]: number };
+  high_contrast?: boolean;
 }
 
 export interface Skin {

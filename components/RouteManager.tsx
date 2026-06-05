@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { BusRoute, RouteStatus, Company, City, User, LedColor, RouteSection, TicketingConfig, Trip, TicketSale } from '../types';
+import { BusRoute, RouteStatus, Company, City, User, LedColor, RouteSection, TicketingConfig, Trip, TicketSale, BusStation } from '../types';
 import { Plus, Navigation, Trash2, X, Pencil, Save, Clock, ListChecks, Type, Search, LayoutGrid, Palette, Zap, Binary, Hash, ArrowRight, BarChart3, Users, DollarSign, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../services/database';
@@ -11,6 +11,7 @@ interface RouteManagerProps {
   trips: Trip[];
   currentUser: User | null;
   ticketingConfig: TicketingConfig | null;
+  busStations?: BusStation[];
   onAddRoute: (route: BusRoute) => void;
   onUpdateRoute: (route: BusRoute) => void;
   onDeleteRoute: (id: string) => void;
@@ -55,6 +56,7 @@ const RouteManager: React.FC<RouteManagerProps> = ({
   cities = [], 
   ticketingConfig,
   trips = [],
+  busStations = [],
   onAddRoute, 
   onUpdateRoute, 
   onDeleteRoute, 
@@ -248,6 +250,11 @@ const RouteManager: React.FC<RouteManagerProps> = ({
       addToast("Preencha todos os campos obrigatórios.", "error");
       return;
     }
+    if ((formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL') && 
+        (!formData.origin_station_id || !formData.origin_station_platform || !formData.destination_station_id || !formData.destination_station_platform)) {
+      addToast("Os campos de Rodoviária e Plataforma são obrigatórios para rotas rodoviárias/intermunicipais.", "error");
+      return;
+    }
     const route = { ...formData } as BusRoute;
     if (editingId) {
       onUpdateRoute({ ...route, id: editingId });
@@ -431,6 +438,25 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                             <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.prefixo_linha || ''} onChange={e => setFormData({...formData, prefixo_linha: e.target.value})} placeholder="501" />
                         </div>
                         <div>
+                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tipo de Estrada/Serviço *</label>
+                            <select 
+                                className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
+                                value={formData.route_type || 'URBANO'} 
+                                onChange={e => setFormData({
+                                    ...formData, 
+                                    route_type: e.target.value as any,
+                                    origin_station_id: undefined,
+                                    origin_station_platform: undefined,
+                                    destination_station_id: undefined,
+                                    destination_station_platform: undefined
+                                })}
+                            >
+                                <option value="URBANO">Urbano / Municipal</option>
+                                <option value="RODOVIARIA">Rodoviário</option>
+                                <option value="INTERMUNICIPAL">Intermunicipal / Linha</option>
+                            </select>
+                        </div>
+                        <div>
                             <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Ponto de Origem *</label>
                             <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.origin || ''} onChange={e => setFormData({...formData, origin: e.target.value})} placeholder="ORIGEM" />
                         </div>
@@ -438,6 +464,81 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                             <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Ponto de Destino *</label>
                             <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.destination || ''} onChange={e => setFormData({...formData, destination: e.target.value})} placeholder="DESTINO" />
                         </div>
+
+                        {(formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL') && (
+                          <>
+                            <div className="col-span-1">
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Rodoviária de Origem *</label>
+                                <select 
+                                    className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
+                                    value={formData.origin_station_id || ''} 
+                                    onChange={e => {
+                                        const statId = e.target.value;
+                                        const stat = busStations.find(x => x.id === statId);
+                                        setFormData({
+                                            ...formData, 
+                                            origin_station_id: statId,
+                                            origin: stat ? stat.name : (formData.origin || ''),
+                                            origin_station_platform: ''
+                                        });
+                                    }}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {busStations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Plataforma Origem *</label>
+                                <select 
+                                    className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white pb-3" 
+                                    value={formData.origin_station_platform || ''} 
+                                    onChange={e => setFormData({...formData, origin_station_platform: e.target.value})}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {(busStations.find(x => x.id === formData.origin_station_id)?.platforms || '')
+                                      .split(',')
+                                      .map(p => p.trim())
+                                      .filter(Boolean)
+                                      .map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Rodoviária de Destino *</label>
+                                <select 
+                                    className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
+                                    value={formData.destination_station_id || ''} 
+                                    onChange={e => {
+                                        const statId = e.target.value;
+                                        const stat = busStations.find(x => x.id === statId);
+                                        setFormData({
+                                            ...formData, 
+                                            destination_station_id: statId,
+                                            destination: stat ? stat.name : (formData.destination || ''),
+                                            destination_station_platform: ''
+                                        });
+                                    }}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {busStations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div className="col-span-1">
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Plataforma Destino *</label>
+                                <select 
+                                    className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white pb-3" 
+                                    value={formData.destination_station_platform || ''} 
+                                    onChange={e => setFormData({...formData, destination_station_platform: e.target.value})}
+                                >
+                                    <option value="">Selecione...</option>
+                                    {(busStations.find(x => x.id === formData.destination_station_id)?.platforms || '')
+                                      .split(',')
+                                      .map(p => p.trim())
+                                      .filter(Boolean)
+                                      .map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
+                            </div>
+                          </>
+                        )}
                         <div>
                             <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tarifa Base R$ *</label>
                             <input type="text" className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.price)} onChange={e => handleCurrencyChange(e.target.value, 'price')} />

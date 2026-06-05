@@ -535,6 +535,43 @@ const VehicleManager: React.FC<VehicleManagerProps> = ({
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Número do Chassi *</label>
                         <input required className="w-full px-4 py-3 border-2 border-yellow-400 rounded-xl bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 font-bold" value={formData.chassis || ''} onChange={e => setFormData({...formData, chassis: e.target.value})} placeholder="17 caracteres..." />
                     </div>
+
+                    {!editingId && (
+                      <div className="col-span-full border-2 border-red-500 bg-red-50/20 dark:bg-red-950/20 p-6 rounded-[2rem] space-y-4">
+                        <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                           <AlertTriangle size={20} />
+                           <h4 className="text-sm font-black uppercase tracking-tight">Vistoria de Frota Obrigatória</h4>
+                        </div>
+                        <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-400 uppercase italic leading-normal">
+                          Conforme politicas de segurança da empresa, todo novo veículo registrado na frota deve obrigatoriamente possuir um registro de vistoria estrutural e preventiva inicial.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase mb-1 ml-2">Data da Inspeção *</label>
+                            <input 
+                              type="date" 
+                              required 
+                              className="w-full px-4 py-3 border-2 border-red-500 rounded-xl bg-white dark:bg-zinc-900 dark:text-zinc-100 font-bold outline-none" 
+                              value={formData.last_inspection || ''} 
+                              onChange={e => setFormData({...formData, last_inspection: e.target.value})} 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase mb-1 ml-2">Status da Vistoria *</label>
+                            <select 
+                              required
+                              className="w-full px-4 py-3 border-2 border-red-500 rounded-xl bg-white dark:bg-zinc-900 dark:text-zinc-100 font-bold outline-none" 
+                              value={formData.inspection_status || ''} 
+                              onChange={e => setFormData({...formData, inspection_status: e.target.value})}
+                            >
+                              <option value="">Selecione...</option>
+                              <option value="APROVADO">APROVADO INTEGRALMENTE</option>
+                              <option value="APROVADO_OBS">APROVADO COM RECOMENDAÇÕES</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                 </div>
 
                 <div className="bg-blue-50 dark:bg-blue-900/10 p-5 rounded-2xl border-2 border-blue-200 dark:border-blue-900/30 flex items-start gap-4">

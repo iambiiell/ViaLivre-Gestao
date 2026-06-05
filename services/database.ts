@@ -5,7 +5,7 @@ import { supabase } from './supabaseClient';
 export { supabase };
 import { RealtimeChannel } from '@supabase/supabase-js';
 
-export type TableName = 'routes' | 'trips' | 'users' | 'companies' | 'vehicles' | 'occurrences' | 'cities' | 'notices' | 'push_subscriptions' | 'ticket_sales' | 'maintenance' | 'inspections' | 'ticketing_config' | 'payroll_rubrics' | 'role_configs' | 'notifications' | 'shifts' | 'time_tracking' | 'driver_logs' | 'routes_logs' | 'system_settings' | 'imp_cards' | 'imp_card_recharges' | 'user_occurrences' | 'traffic_violations' | 'user_fines' | 'job_applications' | 'job_vacancies' | 'skins' | 'trips_audit' | 'activation_keys' | 'subscriptions' | 'ticket_booths';
+export type TableName = 'routes' | 'trips' | 'users' | 'companies' | 'vehicles' | 'occurrences' | 'cities' | 'notices' | 'push_subscriptions' | 'ticket_sales' | 'maintenance' | 'inspections' | 'ticketing_config' | 'payroll_rubrics' | 'role_configs' | 'notifications' | 'shifts' | 'time_tracking' | 'driver_logs' | 'routes_logs' | 'system_settings' | 'imp_cards' | 'imp_card_recharges' | 'user_occurrences' | 'traffic_violations' | 'user_fines' | 'job_applications' | 'job_vacancies' | 'skins' | 'trips_audit' | 'activation_keys' | 'subscriptions' | 'ticket_booths' | 'bus_stations';
 
 export const cleanPayload = (table: TableName, obj: any, isUpdate = false) => {
   if (!obj || typeof obj !== 'object') return {};
@@ -45,7 +45,7 @@ export const db = {
     'system_settings', 'imp_cards', 
     'imp_card_recharges', 'user_occurrences', 'traffic_violations', 'user_fines',
     'job_applications', 'job_vacancies', 'skins', 'trips_audit',
-    'subscriptions', 'ticket_booths'
+    'subscriptions', 'ticket_booths', 'bus_stations'
   ],
 
   fetchAll: async <T>(table: TableName): Promise<T[]> => {
@@ -57,19 +57,30 @@ export const db = {
     
     if (currentSystemId && isolatedTables.includes(table)) {
       query = query.eq('system_id', currentSystemId);
-    } else if (isolatedTables.includes(table) && table !== 'routes' && table !== 'trips' && table !== 'companies' && table !== 'notices') {
+    } else if (isolatedTables.includes(table) && table !== 'routes' && table !== 'trips' && table !== 'companies' && table !== 'notices' && table !== 'bus_stations') {
       // Se a tabela exige isolamento e não temos system_id, retornamos vazio (exceto para itens públicos)
       console.warn(`[DB_WARN] Tentativa de buscar ${table} sem system_id definido. Retornando vazio.`);
       return [];
     }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error(`[DB_ERROR] Falha ao buscar ${table}:`, { message: error.message, details: error.details, hint: error.hint });
-      throw error;
+    try {
+      const { data, error } = await query;
+      if (error) {
+        if (table === 'bus_stations') {
+          return JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]') as any;
+        }
+        console.error(`[DB_ERROR] Falha ao buscar ${table}:`, { message: error.message, details: error.details, hint: error.hint });
+        throw error;
+      }
+      console.log(`[DB_SUCCESS] ${data?.length || 0} registros recuperados de ${table}`);
+      return (data || []) as T[];
+    } catch (e) {
+      if (table === 'bus_stations') {
+        const local = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+        return (currentSystemId ? local.filter((x: any) => x.system_id === currentSystemId) : local) as any;
+      }
+      throw e;
     }
-    console.log(`[DB_SUCCESS] ${data?.length || 0} registros recuperados de ${table}`);
-    return (data || []) as T[];
   },
 
   fetchAllGlobal: async <T>(table: TableName): Promise<T[]> => {
@@ -91,13 +102,31 @@ export const db = {
       payload.system_id = currentSystemId;
     }
     
-    const { data, error } = await supabase.from(table).insert(payload).select().single();
-    if (error) {
-      console.error(`[DB_ERROR] Falha na inserção em ${table}:`, { message: error.message, details: error.details, payload });
-      throw error;
+    try {
+      const { data, error } = await supabase.from(table).insert(payload).select().single();
+      if (error) {
+        if (table === 'bus_stations') {
+          const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+          const newItem = { ...payload, id: `bs-${Date.now()}`, system_id: currentSystemId || 'local' } as any;
+          list.push(newItem);
+          localStorage.setItem('vialivre_bus_stations', JSON.stringify(list));
+          return newItem;
+        }
+        console.error(`[DB_ERROR] Falha na inserção em ${table}:`, { message: error.message, details: error.details, payload });
+        throw error;
+      }
+      console.log(`[DB_SUCCESS] Registro criado em ${table} com ID: ${data.id}`);
+      return data as T;
+    } catch (e) {
+      if (table === 'bus_stations') {
+        const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+        const newItem = { ...payload, id: `bs-${Date.now()}`, system_id: currentSystemId || 'local' } as any;
+        list.push(newItem);
+        localStorage.setItem('vialivre_bus_stations', JSON.stringify(list));
+        return newItem;
+      }
+      throw e;
     }
-    console.log(`[DB_SUCCESS] Registro criado em ${table} com ID: ${data.id}`);
-    return data as T;
   },
 
   update: async <T extends { id: string; system_id?: string }>(table: TableName, item: T): Promise<T | null> => {
@@ -110,13 +139,35 @@ export const db = {
       query = query.eq('system_id', currentSystemId);
     }
 
-    const { data, error } = await query.select().single();
-    if (error) {
-      console.error(`[DB_ERROR] Falha na atualização em ${table}:`, { message: error.message, details: error.details, payload });
-      throw error;
+    try {
+      const { data, error } = await query.select().single();
+      if (error) {
+        if (table === 'bus_stations') {
+          const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+          const idx = list.findIndex((x: any) => x.id === item.id);
+          if (idx !== -1) {
+            list[idx] = { ...list[idx], ...item };
+            localStorage.setItem('vialivre_bus_stations', JSON.stringify(list));
+            return list[idx] as T;
+          }
+        }
+        console.error(`[DB_ERROR] Falha na atualização em ${table}:`, { message: error.message, details: error.details, payload });
+        throw error;
+      }
+      console.log(`[DB_SUCCESS] Registro ${item.id} atualizado em ${table}`);
+      return data as T;
+    } catch (e) {
+      if (table === 'bus_stations') {
+        const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+        const idx = list.findIndex((x: any) => x.id === item.id);
+        if (idx !== -1) {
+          list[idx] = { ...list[idx], ...item };
+          localStorage.setItem('vialivre_bus_stations', JSON.stringify(list));
+          return list[idx] as T;
+        }
+      }
+      throw e;
     }
-    console.log(`[DB_SUCCESS] Registro ${item.id} atualizado em ${table}`);
-    return data as T;
   },
 
   delete: async (table: TableName, id: string): Promise<boolean> => {
@@ -127,13 +178,29 @@ export const db = {
       query = query.eq('system_id', currentSystemId);
     }
 
-    const { error } = await query;
-    if (error) {
-      console.error(`[DB_ERROR] Falha ao excluir de ${table}:`, { message: error.message, details: error.details, id });
-      throw error;
+    try {
+      const { error } = await query;
+      if (error) {
+        if (table === 'bus_stations') {
+          const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+          const filtered = list.filter((x: any) => x.id !== id);
+          localStorage.setItem('vialivre_bus_stations', JSON.stringify(filtered));
+          return true;
+        }
+        console.error(`[DB_ERROR] Falha ao excluir de ${table}:`, { message: error.message, details: error.details, id });
+        throw error;
+      }
+      console.log(`[DB_SUCCESS] Registro ${id} removido permanentemente de ${table}`);
+      return true;
+    } catch (e) {
+      if (table === 'bus_stations') {
+        const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
+        const filtered = list.filter((x: any) => x.id !== id);
+        localStorage.setItem('vialivre_bus_stations', JSON.stringify(filtered));
+        return true;
+      }
+      throw e;
     }
-    console.log(`[DB_SUCCESS] Registro ${id} removido permanentemente de ${table}`);
-    return true;
   },
 
   clearTable: async (table: TableName): Promise<boolean> => {
@@ -197,6 +264,7 @@ export const db = {
   getActivationKeys: () => db.fetchAll<any>('activation_keys'),
   getSubscriptions: () => db.fetchAll<any>('subscriptions'),
   getTicketBooths: () => db.fetchAll<any>('ticket_booths'),
+  getBusStations: () => db.fetchAll<any>('bus_stations'),
   getAllUsers: () => db.fetchAllGlobal<User>('users'),
   getAllActivationKeys: () => db.fetchAllGlobal<any>('activation_keys'),
   getAllSubscriptions: () => db.fetchAllGlobal<any>('subscriptions'),

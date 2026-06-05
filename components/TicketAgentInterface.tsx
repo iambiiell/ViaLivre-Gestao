@@ -289,32 +289,13 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const selectedVehicle = useMemo(() => vehicles.find(v => v.prefix === selectedTrip?.bus_number), [vehicles, selectedTrip]);
   const selectedCompany = useMemo(() => companies.find(c => c.id === selectedRoute?.company_id), [companies, selectedRoute]);
 
-  // Auto-link specific coupons or reset discount if payment method changes
+  // Reset discount if payment method changes violating the coupon's rules
   useEffect(() => {
     const normalizedMethod = (paymentMethod || '').toUpperCase().replace(/[\s_]/g, '');
-    let matchedCoupon: any = null;
     
-    if (ticketingConfig?.active_coupons) {
-      matchedCoupon = ticketingConfig.active_coupons.find(c => {
-        if (c.conditions && c.conditions.includes('[PGTO:')) {
-          const reqMethod = c.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1]?.toUpperCase().replace(/[\s_]/g, '');
-          return reqMethod === normalizedMethod;
-        }
-        return false;
-      });
-    }
-
-    if (matchedCoupon) {
-      setCouponCode(matchedCoupon.code);
-      const basePrice = selectedSection ? (selectedSection.price || 0) : (selectedRoute?.price || 0);
-      const boardingFee = selectedSection ? (selectedSection.boarding_fee || 0) : (selectedRoute?.boarding_fee || 0);
-      const fullBase = basePrice + boardingFee;
-      const discount = matchedCoupon.type === 'PERCENT' ? (fullBase * (matchedCoupon.discount / 100)) : matchedCoupon.discount;
-      setDiscountValue(discount);
-      addToast(`Cupom Especial ${matchedCoupon.code} vinculado automaticamente ao pagamento ${paymentMethod.replace(/[_]/g, ' ')}!`, "success");
-    } else {
-      // Check if current applied coupon has a payment condition that is now violated.
-      // If it has NO payment condition, we do NOT clear it!
+    // Check if current applied coupon has a payment condition that is now violated.
+    // If it has NO payment condition, we do NOT clear it!
+    if (couponCode) {
       const currentActiveCoupon = ticketingConfig?.active_coupons?.find(c => c.code.toUpperCase() === couponCode.toUpperCase());
       if (currentActiveCoupon && currentActiveCoupon.conditions && currentActiveCoupon.conditions.includes('[PGTO:')) {
           const reqMethod = currentActiveCoupon.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1]?.toUpperCase().replace(/[\s_]/g, '');
@@ -330,7 +311,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
       setAmountReceived(0);
       setChangeAmount(0);
     }
-  }, [paymentMethod, ticketingConfig, selectedRoute, selectedSection]);
+  }, [paymentMethod, ticketingConfig, selectedRoute, selectedSection, couponCode]);
 
   // Pre-fill card identifiers for active logged in user
   useEffect(() => {
@@ -441,70 +422,112 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
         // Force refresh all sales from DB to ensure it's not stale
         let tripSales = (sales || []).filter(s => s.status !== 'canceled');
 
-        if (isPresale) {
-          // Filter by route, date and time
-          tripSales = tripSales.filter(s => 
-            s.route_id === selectedRouteId && 
-            s.trip_date === saleDate && 
-            s.departure_time === presaleTime
-          );
-        } else {
-          // Standard Trip Selection
+        // Determine route ID, date, time, and direction for the active seat map
+        let currentRouteId = selectedRouteId;
+        let currentTime = isPresale ? presaleTime : '';
+        let currentDirection = selectedDirection;
+
+        const isPresaleId = selectedTripId && selectedTripId.startsWith('PRESALE_');
+        if (isPresaleId) {
+          const parts = selectedTripId.split('_');
+          if (parts.length >= 4) {
+            currentRouteId = parts[1];
+            currentTime = parts[2];
+            currentDirection = parts[3] as 'IDA' | 'VOLTA';
+          }
+        } else if (selectedTripId) {
           const trip = trips.find(t => t.id === selectedTripId);
-          tripSales = tripSales.filter(s => {
-            // Case 1: Match by direct trip_id
-            if (s.trip_id === selectedTripId) return true;
-            
-            // Case 2: Fallback for sales without trip_id (presales) that match route/date/time
-            const matchesTime = s.departure_time === trip?.departure_time;
-            const matchesRoute = s.route_id === selectedRouteId;
-            const matchesDate = s.trip_date === saleDate;
-            
-            return matchesRoute && matchesDate && matchesTime;
-          });
+          if (trip) {
+            currentRouteId = trip.route_id || selectedRouteId;
+            currentTime = trip.departure_time;
+            currentDirection = trip.direction || selectedDirection;
+          }
         }
 
-        // Sectional Occupation Logic: 
-        // A seat is only occupied if the intentional travel overlaps with existing sales
-        const routeStops = selectedRoute?.stops || [];
-        if (routeStops.length > 1 && originSearch && destinationSearch) {
-            const getIdx = (name: string) => {
-                const norm = normalize(name || '');
-                return routeStops.findIndex(st => normalize(st) === norm);
-            };
+        const activeRoute = routes.find(r => r.id === currentRouteId);
+        const buySection = activeRoute && selectedSectionIndex !== -1 && activeRoute.sections ? activeRoute.sections[selectedSectionIndex] : null;
 
-            const intentStart = getIdx(originSearch);
-            const intentEnd = getIdx(destinationSearch);
+        const buyOrigin = buySection ? buySection.origin : (activeRoute?.origin || '');
+        const buyDestination = buySection ? buySection.destination : (activeRoute?.destination || '');
 
-            if (intentStart !== -1 && intentEnd !== -1) {
-                const iMin = Math.min(intentStart, intentEnd);
-                const iMax = Math.max(intentStart, intentEnd);
+        tripSales = tripSales.filter(s => {
+          // Match dynamically by route, date, departure time, and direction!
+          // This guarantees that even if there is no registered scale/trip, or if it is a pre-sale, or if they are synced, the seat is disabled.
+          const matchesRoute = s.route_id === currentRouteId;
+          const matchesDate = s.trip_date && s.trip_date.startsWith(saleDate);
+          const matchesTime = s.departure_time === currentTime;
+          const matchesDirection = s.direction === currentDirection;
 
-                tripSales = tripSales.filter(s => {
-                    // If passenger already disembarked, the seat is free for that sale period
-                    if (s.status === 'disembarked') return false;
+          if (!(matchesRoute && matchesDate && matchesTime && matchesDirection)) {
+            return false;
+          }
 
-                    const sStart = getIdx(s.section_origin || selectedRoute?.origin || '');
-                    const sEnd = getIdx(s.section_destination || selectedRoute?.destination || '');
+          // Dynamic Sectional Overlap Check
+          if (!activeRoute) return true; // Fail safe if route details aren't loaded
 
-                    // If we can't find stops, play safe and consider it occupied
-                    if (sStart === -1 || sEnd === -1) return true;
+          const norm = (str: string) => (str || '').trim().toUpperCase();
+          const bOrig = norm(buyOrigin);
+          const bDest = norm(buyDestination);
+          const sOrig = norm(s.section_origin) || norm(activeRoute.origin);
+          const sDest = norm(s.section_destination) || norm(activeRoute.destination);
 
-                    const sMin = Math.min(sStart, sEnd);
-                    const sMax = Math.max(sStart, sEnd);
+          // If the route has no sections, any sale is a full conflict and blocks the seat
+          if (!activeRoute.sections || activeRoute.sections.length === 0) {
+            return true;
+          }
 
-                    // Overlap check (Standard Interval Overlap)
-                    // Two intervals [iMin, iMax] and [sMin, sMax] overlap if:
-                    // iMax > sMin AND iMin < sMax
-                    return iMax > sMin && iMin < sMax;
-                });
+          // Build ordered list of stops for the route starting at activeRoute.origin
+          const stops: string[] = [norm(activeRoute.origin)];
+          const sections = activeRoute.sections || [];
+          let currentCity = norm(activeRoute.origin);
+          const visited = new Set<string>([currentCity]);
+
+          while (currentCity !== norm(activeRoute.destination)) {
+            const nextSection = sections.find(sec => norm(sec.origin) === currentCity && !visited.has(norm(sec.destination)));
+            if (nextSection) {
+              currentCity = norm(nextSection.destination);
+              stops.push(currentCity);
+              visited.add(currentCity);
+            } else {
+              if (!stops.includes(norm(activeRoute.destination))) {
+                stops.push(norm(activeRoute.destination));
+              }
+              break;
             }
-        }
+          }
+
+          // Find indices
+          let bStart = stops.indexOf(bOrig);
+          let bEnd = stops.indexOf(bDest);
+          let sStart = stops.indexOf(sOrig);
+          let sEnd = stops.indexOf(sDest);
+
+          // Fallbacks
+          if (bStart === -1) bStart = 0;
+          if (bEnd === -1) bEnd = stops.length - 1;
+          if (sStart === -1) sStart = 0;
+          if (sEnd === -1) sEnd = stops.length - 1;
+
+          // Swap if start > end (e.g. reverse order in 'VOLTA' or custom ordering)
+          if (bStart > bEnd) {
+            const temp = bStart;
+            bStart = bEnd;
+            bEnd = temp;
+          }
+          if (sStart > sEnd) {
+            const temp = sStart;
+            sStart = sEnd;
+            sEnd = temp;
+          }
+
+          // Overlap condition: (buyStart < soldEnd) && (soldStart < buyEnd)
+          return (bStart < sEnd) && (sStart < bEnd);
+        });
 
         setOccupiedSeats(new Set(tripSales.map(s => Number(s.seat_number))));
       });
     }
-  }, [selectedTripId, isPresale, selectedRouteId, saleDate, presaleTime, originSearch, destinationSearch, selectedRoute, salesRefreshKey, selectedTrip]);
+  }, [selectedTripId, isPresale, selectedRouteId, saleDate, presaleTime, originSearch, destinationSearch, selectedRoute, salesRefreshKey, selectedTrip, step, activeView, trips, selectedDirection, selectedSectionIndex, routes]);
 
   const handleCepChange = async (seat: number, cep: string) => {
     const maskedCep = cepMask(cep);
@@ -665,6 +688,8 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                 trip_date: saleDate, 
                 departure_time: isPresale ? presaleTime : selectedTrip?.departure_time,
                 direction: selectedDirection,
+                section_origin: selectedSection ? selectedSection.origin : (selectedRoute?.origin || ''),
+                section_destination: selectedSection ? selectedSection.destination : (selectedRoute?.destination || ''),
                 is_presale: isPresale,
                 seat_number: seat,
                 passenger_name: formData.full_name,
@@ -1194,9 +1219,9 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
         <div className="flex items-center gap-4">
            <div className="p-3 bg-yellow-400 rounded-2xl shadow-lg"><Ticket size={28} className="text-slate-900" /></div>
            <div>
-               <h1 className="text-xl font-black uppercase italic tracking-tighter leading-none">{isPassengerView ? 'Autoatendimento' : 'Terminal de Vendas'}</h1>
+               <h1 className="text-xl font-black uppercase italic tracking-tighter leading-none">{isPassengerView ? 'Guichê de Vendas - Autoatendimento' : 'Guichê de Vendas'}</h1>
                <div className="flex flex-col mt-1">
-                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{isPassengerView ? 'Bilhete Digital' : (currentUser?.full_name || 'Agente')}</p>
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{isPassengerView ? 'Autoatendimento - Passageiro' : (currentUser?.full_name || 'Agente')}</p>
                    {!isPassengerView && selectedBooth && (
                      <button 
                        type="button"

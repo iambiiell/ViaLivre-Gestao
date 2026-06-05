@@ -130,7 +130,8 @@ export const downloadTicket = async (saleId: string, originName?: string, destin
       doc.text(sale.created_at.split('T')[0].split('-').reverse().join('/'), 12, yOffset + 77);
       doc.text(sale.departure_time || trip?.departure_time || '---', 12 + colWidth, yOffset + 77);
       doc.text(sale.seat_number.toString().padStart(2, '0'), 12 + colWidth*2, yOffset + 77);
-      doc.text('B2', 12 + colWidth*3, yOffset + 77);
+      const finalPlatform = (route?.origin_station_platform || '---').toUpperCase();
+      doc.text(finalPlatform, 12 + colWidth*3, yOffset + 77);
       doc.text((route?.prefixo_linha || '---').toUpperCase(), 12 + colWidth*4, yOffset + 77);
 
       // Passenger and Price

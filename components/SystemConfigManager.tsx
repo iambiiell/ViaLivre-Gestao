@@ -219,6 +219,28 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
                   />
                </div>
             </div>
+
+            <div className="col-span-full border-t border-slate-50 dark:border-zinc-800/50 pt-6">
+                <div className="flex items-center justify-between p-6 bg-yellow-50 dark:bg-zinc-800/40 rounded-3xl border-2 border-yellow-400">
+                  <div className="mr-4">
+                    <h4 className="text-sm font-black uppercase text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                       Acessibilidade: Modo de Alto Contraste
+                    </h4>
+                    <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-400 uppercase italic mt-1 leading-normal max-w-xl">
+                      Altera as cores de botões, tags e menus para cores sólidas de alto contraste, otimizando a leitura para motoristas em ambientes externos com alta luminosidade.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={!!systemSettings?.high_contrast}
+                      onChange={e => handleUpdateSystemSetting('high_contrast', e.target.checked)}
+                    />
+                    <div className="w-14 h-8 bg-slate-200 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-yellow-400 border-2 border-slate-900"></div>
+                  </label>
+                </div>
+            </div>
           </div>
         </div>
 

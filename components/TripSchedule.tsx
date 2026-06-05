@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Trip, BusRoute, User, Vehicle, TripStatus, TicketSale, UserFine, Company } from '../types';
+import { Trip, BusRoute, User, Vehicle, TripStatus, TicketSale, UserFine, Company, Inspection } from '../types';
 import { Clock, User as UserIcon, Bus, ArrowRight, Pencil, Plus, X, Save, Trash2, Calendar, Search, CheckCircle2, DollarSign, Users, Loader2, ShieldCheck, Copy, AlertTriangle, List, ShieldAlert, UserCheck, PlayCircle, Ticket, Hash, Printer, Ban, FileText } from 'lucide-react';
 import { db } from '../services/database';
 
@@ -17,6 +17,7 @@ interface TripScheduleProps {
   onSendSMS: (driverId: string, message: string) => void;
   addToast: (message: string, type?: 'success' | 'error' | 'warning') => void;
   userFines?: UserFine[];
+  inspections?: Inspection[];
 }
 
 const TripSchedule: React.FC<TripScheduleProps> = ({ 
@@ -31,7 +32,8 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
   onDeleteTrip,
   onSendSMS,
   addToast,
-  userFines = []
+  userFines = [],
+  inspections = []
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -172,7 +174,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
 
   const handleSave = async () => {
       const selectedTimes = formData.selectedTimes || [];
-      const hasManualTime = formData.departure_time && formData.departure_time.trim().length > 0;
+      const hasManualTime = formData.departure_time && formData.departure_time.trim().length > 0 && formData.departure_time !== '00:00';
       
       const timesToRegister = [...selectedTimes];
       if (hasManualTime) {
@@ -182,6 +184,18 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
       if (!formData.route_id || !formData.driver_id || !formData.bus_number || timesToRegister.length === 0 || !formData.fiscal_id || !formData.trip_date) {
           addToast("Erro: Preencha Data, Itinerário, Motorista, Fiscal, Veículo e selecione ao menos um Horário.", "error"); 
           return;
+      }
+
+      // Security Check: Active Inspection Requirement
+      if (formData.bus_number) {
+          const vehObj = vehicles.find(v => v.prefix === formData.bus_number);
+          if (vehObj) {
+              const hasInspectionRecord = inspections.some(i => i.vehicle_id === vehObj.id);
+              if (!hasInspectionRecord) {
+                  addToast(`BLOQUEIO DE ESCALA: O veículo #${formData.bus_number} não possui nenhuma vistoria operacional cadastrada na aba Vistorias. Cadastre uma vistoria para este ônibus primeiro.`, "error");
+                  return;
+              }
+          }
       }
       
       const driver = availableDrivers.find(d => d.id === formData.driver_id);
@@ -631,7 +645,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
               {isExporting ? <Loader2 className="animate-spin" size={20} /> : <FileText size={20} />} 
               Exportar Escala
             </button>
-            <button onClick={() => { setEditingId(null); setFormData({ trip_date: filterDate, status: 'Agendada', departure_time: '00:00', company_id: filterCompanyId, ignore_company_filter: ignoreCompanyFilter, passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } } }); setIsModalOpen(true); }} className="px-8 py-5 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-slate-900"><Plus size={20} /> Adicionar Programação</button>
+            <button onClick={() => { setEditingId(null); setFormData({ trip_date: filterDate, status: 'Agendada', departure_time: '', company_id: filterCompanyId, ignore_company_filter: ignoreCompanyFilter, passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } } }); setIsModalOpen(true); }} className="px-8 py-5 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-slate-900"><Plus size={20} /> Adicionar Programação</button>
           </div>
       </div>
 
@@ -969,7 +983,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
                                               driver_search: '',
                                               conductor_id: '',
                                               conductor_search: '',
-                                              departure_time: '00:00',
+                                              departure_time: '',
                                               direction: ''
                                           });
                                       }}

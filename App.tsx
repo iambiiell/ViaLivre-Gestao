@@ -13,6 +13,7 @@ import UserManager from './components/UserManager';
 import VehicleManager from './components/VehicleManager';
 import ObservationManager from './components/ObservationManager';
 import CityManager from './components/CityManager';
+import BusStationManager from './components/BusStationManager';
 import NoticeManager from './components/NoticeManager';
 import ReportManager from './components/ReportManager';
 import MaintenanceManager from './components/MaintenanceManager';
@@ -40,7 +41,7 @@ import SubscriptionManager from './components/SubscriptionManager';
 import LicenseManagement from './components/LicenseManagement';
 import UserSubscription from './components/UserSubscription';
 import SubscriptionExpired from './components/SubscriptionExpired';
-import { ViewState, BusRoute, Trip, User, Company, Vehicle, IssueReport, City, Notice, ThemeMode, TicketSale, Inspection, TicketingConfig, RoleConfig, AppNotification, Shift, SystemSettings, UserFine, Subscription, Skin, TimeEntry, TicketBooth } from './types';
+import { ViewState, BusRoute, Trip, User, Company, Vehicle, IssueReport, City, Notice, ThemeMode, TicketSale, Inspection, TicketingConfig, RoleConfig, AppNotification, Shift, SystemSettings, UserFine, Subscription, Skin, TimeEntry, TicketBooth, BusStation } from './types';
 import { db, supabase, TableName } from './services/database';
 
 export type ToastType = 'success' | 'error' | 'warning';
@@ -152,6 +153,7 @@ const ViewContent: React.FC<{
       case 'vehicles': return <VehicleManager {...commonProps} onAddVehicle={v => handleAction('create', 'vehicles', v)} onUpdateVehicle={v => handleAction('update', 'vehicles', v)} onDeleteVehicle={id => handleAction('delete', 'vehicles', id)} skins={skins} />;
       case 'observations': return <ObservationManager {...commonProps} initialOccurrenceId={notificationMetadata?.occurrenceId} onResolveReport={(id, metadata) => handleAction('update', 'occurrences', { id, status: 'Concluído', technician_report: metadata })} onDeleteReport={id => handleAction('delete', 'occurrences', id)} />;
       case 'cities': return <CityManager {...commonProps} onAddCity={c => handleAction('create', 'cities', c)} onUpdateCity={c => handleAction('update', 'cities', c)} onDeleteCity={id => handleAction('delete', 'cities', id)} />;
+      case 'bus-stations': return <BusStationManager {...commonProps} onAddStation={s => handleAction('create', 'bus_stations', s)} onUpdateStation={s => handleAction('update', 'bus_stations', s)} onDeleteStation={id => handleAction('delete', 'bus_stations', id)} />;
       case 'notices': return <NoticeManager {...commonProps} onAddNotice={n => handleAction('create', 'notices', n)} onDeleteNotice={id => handleAction('delete', 'notices', id)} />;
       case 'reports-view': return <ReportManager {...commonProps} onDeleteTrip={id => handleAction('delete', 'trips', id)} />;
       case 'maintenance': return <MaintenanceManager {...commonProps} />;
@@ -506,6 +508,7 @@ const App: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [ticketBooths, setTicketBooths] = useState<TicketBooth[]>([]);
+  const [busStations, setBusStations] = useState<BusStation[]>([]);
   const [ticketingConfig, setTicketingConfig] = useState<TicketingConfig | null>(DEFAULT_CONFIG);
   const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -523,6 +526,14 @@ const App: React.FC = () => {
 
   const debounceTimers = useRef<Record<string, number>>({});
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    if (systemSettings?.high_contrast) {
+      document.documentElement.classList.add('high-contrast');
+    } else {
+      document.documentElement.classList.remove('high-contrast');
+    }
+  }, [systemSettings?.high_contrast]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -647,8 +658,8 @@ const App: React.FC = () => {
   const loadInitialData = useCallback(async () => {
     console.log('loadInitialData called');
     try {
-      const [r, t, u, c, v, rep, cit, n, insp, cfg, roles, notifs, sfts, settings, fines, subs, skns, tt, booths] = await Promise.allSettled([
-        db.getRoutes(), db.getTrips(), db.getUsers(), db.getCompanies(), db.getVehicles(), db.getReports(), db.getCities(), db.getNotices(), db.getInspections(), db.getTicketingConfig(), db.getRoleConfigs(), db.getNotifications(), db.getShifts(), db.getSystemSettings(), db.getUserFines(), db.getSubscriptions(), db.getSkins(), db.fetchAll<TimeEntry>('time_tracking' as any), db.getTicketBooths()
+      const [r, t, u, c, v, rep, cit, n, insp, cfg, roles, notifs, sfts, settings, fines, subs, skns, tt, booths, bst] = await Promise.allSettled([
+        db.getRoutes(), db.getTrips(), db.getUsers(), db.getCompanies(), db.getVehicles(), db.getReports(), db.getCities(), db.getNotices(), db.getInspections(), db.getTicketingConfig(), db.getRoleConfigs(), db.getNotifications(), db.getShifts(), db.getSystemSettings(), db.getUserFines(), db.getSubscriptions(), db.getSkins(), db.fetchAll<TimeEntry>('time_tracking' as any), db.getTicketBooths(), db.getBusStations()
       ]);
       
       if (r.status === 'fulfilled') setRoutes(r.value || []);
@@ -661,6 +672,7 @@ const App: React.FC = () => {
       if (n.status === 'fulfilled') setNotices(n.value || []);
       if (insp.status === 'fulfilled') setInspections(insp.value || []);
       if (booths.status === 'fulfilled') setTicketBooths(booths.value || []);
+      if (bst.status === 'fulfilled') setBusStations(bst.value || []);
       if (cfg.status === 'fulfilled' && cfg.value && cfg.value.length > 0) setTicketingConfig(cfg.value[0]);
       if (roles.status === 'fulfilled') {
         const roleData = roles.value || [];
@@ -783,6 +795,7 @@ const App: React.FC = () => {
           break;
         case 'inspections': setInspections(syncList); break;
         case 'ticket_booths': setTicketBooths(syncList); break;
+        case 'bus_stations': setBusStations(syncList); break;
         case 'traffic_violations': setUserFines(syncList); break;
         case 'user_fines': setUserFines(syncList); break;
         case 'notifications': setNotifications(syncList); break;
@@ -895,6 +908,75 @@ const App: React.FC = () => {
 
     return () => clearInterval(timer);
   }, [currentUser, isClockedIn, currentView, addToast, shifts]);
+
+  // Automated Weekly Backup Trigger & Export Function
+  const runBackupExport = async (isManual = false) => {
+    try {
+      addToast(isManual ? "Iniciando exportação de segurança..." : "Iniciando cópia de segurança semanal automática...", "success");
+      
+      const tables: TableName[] = [
+        'routes', 'trips', 'users', 'companies', 'vehicles', 'occurrences', 
+        'cities', 'notices', 'ticket_sales', 'maintenance', 'inspections', 
+        'ticketing_config', 'payroll_rubrics', 'role_configs', 'notifications', 
+        'shifts', 'time_tracking', 'driver_logs', 'system_settings', 'imp_cards', 
+        'imp_card_recharges', 'user_occurrences', 'traffic_violations', 'user_fines', 
+        'job_applications', 'job_vacancies', 'skins', 'trips_audit', 
+        'subscriptions', 'ticket_booths', 'bus_stations'
+      ];
+
+      const backupData: Record<string, any[]> = {};
+
+      for (const table of tables) {
+        try {
+          const tableData = await db.fetchAll(table);
+          backupData[table] = tableData || [];
+        } catch (tableErr) {
+          console.warn(`Erro ao exportar tabela ${table}:`, tableErr);
+          backupData[table] = [];
+        }
+      }
+
+      const jsonStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      const todayStr = new Date().toISOString().split('T')[0];
+      link.href = url;
+      link.download = `vialivre_backup_completo_${todayStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      localStorage.setItem('vialivre_last_weekly_backup_timestamp', Date.now().toString());
+      addToast(
+        isManual 
+          ? "Cópia de segurança criada e baixada com sucesso!" 
+          : "Backup semanal automático concluído! Arquivo JSON salvo com sucesso.", 
+        "success"
+      );
+    } catch (err: any) {
+      console.error("Erro ao gerar backup de dados:", err);
+      addToast("Erro ao processar cópia de segurança de dados.", "error");
+    }
+  };
+
+  // Run weekly backup trigger inside React lifecycle
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'ADMIN') return;
+
+    const lastBackupTime = localStorage.getItem('vialivre_last_weekly_backup_timestamp');
+    const now = Date.now();
+    const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+
+    if (!lastBackupTime || (now - Number(lastBackupTime)) >= oneWeekMs) {
+      const timer = setTimeout(() => {
+        runBackupExport(false);
+      }, 5000); // Wait 5 seconds after mount to trigger safely
+      return () => clearTimeout(timer);
+    }
+  }, [currentUser]);
 
   const handleSetUser = (user: User | null) => {
       if (user) {
@@ -1197,6 +1279,10 @@ const App: React.FC = () => {
         notices={notices} 
         vehicles={vehicles} 
         addToast={addToast} 
+        systemSettings={systemSettings}
+        onUpdateSettings={(s) => handleAction('update', 'system_settings', s)}
+        themeMode={themeMode || 'light'}
+        onChangeThemeMode={(mode) => setThemeMode(mode)}
         onExit={() => setIsPassengerMode(false)} 
         onOpenTicketing={(tripId, passengerData, routeId) => {
           setNotificationMetadata({
@@ -1225,6 +1311,7 @@ const App: React.FC = () => {
   }
 
   const commonProps = { 
+    onForceBackup: () => runBackupExport(true),
     routes, 
     trips, 
     users, 
@@ -1241,6 +1328,7 @@ const App: React.FC = () => {
     skins, 
     systemSettings, 
     ticketBooths, 
+    busStations,
     onUpdateSettings: (s: any) => handleAction('update', 'system_settings', s),
     userFines,
     roleConfigs,

@@ -24,6 +24,7 @@ const ACCESSIBLE_VIEWS: ViewState[] = [
   'maintenance',
   'companies',
   'cities',
+  'bus-stations',
   'routes',
   'schedule',
   'dispatcher',

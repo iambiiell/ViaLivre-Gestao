@@ -38,5 +38,6 @@ export const VIEW_LABELS: Record<ViewState, string> = {
   'driver-urban': 'MOTORISTA URBANO',
   'driver-road': 'MOTORISTA RODOVIÁRIO',
   'conductor': 'COBRADOR',
-  'monitoring': 'MONITORAMENTO'
+  'monitoring': 'MONITORAMENTO',
+  'bus-stations': 'RODOVIÁRIAS'
 };

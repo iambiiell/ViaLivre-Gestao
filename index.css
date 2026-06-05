@@ -17,6 +17,67 @@
     font-family: var(--font-sans);
     @apply antialiased bg-white dark:bg-zinc-950 text-slate-900 dark:text-slate-100 overflow-x-hidden transition-colors duration-500;
   }
+
+  /* High Contrast mode overrides */
+  html.high-contrast {
+    filter: contrast(1.25) !important;
+  }
+  
+  html.high-contrast body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  html.high-contrast.dark body,
+  html.high-contrast .dark body {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+  }
+  
+  html.high-contrast select, 
+  html.high-contrast input {
+    border-color: #000000 !important;
+    border-width: 3px !important;
+    color: #000000 !important;
+    background-color: #ffffff !important;
+  }
+  
+  html.high-contrast.dark select,
+  html.high-contrast.dark input,
+  html.high-contrast .dark select,
+  html.high-contrast .dark input {
+    border-color: #ffffff !important;
+    border-width: 3px !important;
+    color: #ffffff !important;
+    background-color: #000000 !important;
+  }
+
+  html.high-contrast .bg-yellow-400,
+  html.high-contrast .bg-yellow-500 {
+    background-color: #000000 !important;
+    color: #ffffff !important;
+    border: 3px solid #000000 !important;
+  }
+
+  html.high-contrast.dark .bg-yellow-400,
+  html.high-contrast.dark .bg-yellow-500,
+  html.high-contrast .dark .bg-yellow-400,
+  html.high-contrast .dark .bg-yellow-500 {
+    background-color: #facc15 !important;
+    color: #000000 !important;
+    border: 3px solid #ffffff !important;
+  }
+
+  html.high-contrast button {
+    border: 3px solid #000000 !important;
+    font-weight: 900 !important;
+  }
+
+  html.high-contrast.dark button,
+  html.high-contrast .dark button {
+    border: 3px solid #ffffff !important;
+    font-weight: 900 !important;
+  }
   
   input, select, textarea {
     @apply transition-all duration-300 border-2 border-yellow-400 outline-none rounded-xl px-4 py-3 bg-white dark:bg-zinc-900 text-slate-900 dark:text-slate-100;

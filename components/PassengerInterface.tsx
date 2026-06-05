@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { BusRoute, Trip, Company, Notice, Vehicle, ImpCard, ImpCardPaymentMethod, ImpCardRecharge, PushSubscription, City } from '../types';
-import { Clock, Search, X, Bus, MapPin, Bell, ShoppingCart, Loader2, Megaphone, SmartphoneNfc, Moon, Sun, Users, Ticket, Share2, ArrowRight, CreditCard, DollarSign, Briefcase } from 'lucide-react';
+import { BusRoute, Trip, Company, Notice, Vehicle, ImpCard, ImpCardPaymentMethod, ImpCardRecharge, PushSubscription, City, SystemSettings } from '../types';
+import { Clock, Search, X, Bus, MapPin, Bell, ShoppingCart, Loader2, Megaphone, SmartphoneNfc, Moon, Sun, Users, Ticket, Share2, ArrowRight, CreditCard, DollarSign, Briefcase, Palette } from 'lucide-react';
 import { cpfMask, cepMask, phoneMask } from '../utils/masks';
 import { fetchAddress } from '../services/cep';
 import TicketAgentInterface from './TicketAgentInterface';
@@ -20,14 +20,33 @@ interface PassengerInterfaceProps {
   addToast: (message: string, type?: 'success' | 'error' | 'warning') => void;
   onExit: () => void;
   onOpenTicketing: (tripId?: string, passengerData?: any, routeId?: string) => void;
+  systemSettings?: SystemSettings | null;
+  onUpdateSettings?: (settings: any) => void;
+  themeMode?: string;
+  onChangeThemeMode?: (theme: any) => void;
 }
 
-const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, companies, cities = [], notices = [], vehicles = [], addToast, onExit, onOpenTicketing }) => {
+const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ 
+  routes, 
+  trips, 
+  companies, 
+  cities = [], 
+  notices = [], 
+  vehicles = [], 
+  addToast, 
+  onExit, 
+  onOpenTicketing,
+  systemSettings,
+  onUpdateSettings,
+  themeMode,
+  onChangeThemeMode
+}) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'routes' | 'notices' | 'recharge' | 'work-with-us'>('routes');
   const [isDarkMode, setIsDarkMode] = useState(() => document.documentElement.classList.contains('dark'));
   const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('passenger_push_optin') === 'true');
   const [pushAlert, setPushAlert] = useState<Notice | null>(null);
+  const [showThemePopup, setShowThemePopup] = useState(false);
 
   // Recharge state
   const [rechargeQuery, setRechargeQuery] = useState('');
@@ -154,6 +173,7 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
 
   const [selectedRouteDetails, setSelectedRouteDetails] = useState<BusRoute | null>(null);
   const [detailDirection, setDetailDirection] = useState<'IDA' | 'VOLTA'>('IDA');
+  const [scheduleDate, setScheduleDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   // New Filters for Passenger
   const [filterCompany, setFilterCompany] = useState<string>('');
@@ -399,6 +419,35 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
     const numberValue = parseInt(cleanValue || '0') / 100;
     return numberValue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
+
+  const handleBuyClick = (tripId: string, routeId: string) => {
+    if (!isCardLoggedIn || !isGuest) {
+        setLoginContext('PURCHASE');
+        setSelectedLoginTab('PASSENGER');
+        setShowCardLogin(true);
+        addToast("Para comprar passagens, faça login com sua conta de Passageiro (o login do Cartão não é válido para compras).", "info");
+    } else {
+        onOpenTicketing(tripId, loggedInCard || undefined, routeId);
+    }
+  };
+
+  const currentSchedules = useMemo(() => {
+    if (!selectedRouteDetails) return [];
+    try {
+      const dateParts = scheduleDate.split('-');
+      const dateObj = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]), 12, 0, 0);
+      const day = dateObj.getDay();
+      let list: { time: string; direction: 'IDA' | 'VOLTA' }[] = [];
+      if (selectedRouteDetails.schedule) {
+        if (day === 0) list = selectedRouteDetails.schedule.sunday || [];
+        else if (day === 6) list = selectedRouteDetails.schedule.saturday || [];
+        else list = selectedRouteDetails.schedule.weekdays || [];
+      }
+      return [...list].filter(item => item.direction === detailDirection).sort((a, b) => a.time.localeCompare(b.time));
+    } catch (e) {
+      return [];
+    }
+  }, [selectedRouteDetails, scheduleDate, detailDirection]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -695,8 +744,8 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                <h1 className="font-black text-xl uppercase italic">Passageiro ViaLivre</h1>
            </div>
            <div className="flex gap-2">
-                <button onClick={toggleNotifications} className={`p-2 rounded-xl ${notificationsEnabled ? 'bg-slate-900 text-yellow-400' : 'bg-slate-900/10'}`}><SmartphoneNfc size={18}/></button>
-                <button onClick={toggleTheme} className="p-2 bg-slate-900/10 rounded-xl">{isDarkMode ? <Sun size={18}/> : <Moon size={18}/>}</button>
+                <button onClick={toggleNotifications} className={`p-2 rounded-xl transition-all ${notificationsEnabled ? 'bg-slate-900 text-yellow-400 font-extrabold border-2 border-yellow-400' : 'bg-slate-900/10 hover:bg-slate-900/20'}`} title={notificationsEnabled ? "Notificações Ativas" : "Permitir Acesso às Notificações"}><SmartphoneNfc size={18}/></button>
+                <button onClick={() => setShowThemePopup(true)} className="p-2 bg-slate-900/10 hover:bg-slate-900/20 rounded-xl transition-all text-slate-800" title="Design e Cores"><Palette size={18}/></button>
                 <button onClick={() => { setShowCardLogin(true); setLoginContext('GENERAL'); }} className={`p-2 rounded-xl ${isCardLoggedIn ? 'bg-emerald-500 text-white' : 'bg-slate-900/10'}`}><CreditCard size={18}/></button>
                 <button onClick={onExit} className="px-3 py-1 bg-slate-900/10 rounded-xl text-[10px] font-black uppercase">Sair</button>
            </div>
@@ -768,73 +817,97 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
 
                       {/* Horários */}
                       <div className="space-y-4">
-                          <div className="flex justify-between items-center">
+                          <div className="flex justify-between items-center bg-slate-50 dark:bg-zinc-900/50 p-2.5 rounded-2xl border dark:border-zinc-800">
                               <h4 className="text-xs font-black uppercase italic flex items-center gap-2">
-                                <Clock size={14} className="text-yellow-500" /> Próximos Horários e Escalas Ativas
+                                <Clock size={14} className="text-yellow-500" /> Quadro de Horários
                               </h4>
-                              <div className="flex bg-slate-100 dark:bg-zinc-800 p-1 rounded-lg">
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row gap-2 justify-between items-start sm:items-center bg-slate-100 dark:bg-zinc-800 p-3 rounded-2xl">
+                              <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-black uppercase text-slate-500">Data:</span>
+                                  <input 
+                                    type="date" 
+                                    value={scheduleDate} 
+                                    onChange={(e) => setScheduleDate(e.target.value)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-zinc-700 font-extrabold text-xs uppercase outline-none shadow-sm text-slate-700 dark:text-white border dark:border-zinc-600"
+                                  />
+                              </div>
+                              <div className="flex p-0.5 bg-slate-200 dark:bg-zinc-700 rounded-xl max-sm:w-full">
                                   <button 
                                     onClick={() => setDetailDirection('IDA')}
-                                    className={`px-3 py-1 rounded-md text-[8px] font-black uppercase transition-all ${detailDirection === 'IDA' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'opacity-50'}`}
+                                    className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${detailDirection === 'IDA' ? 'bg-white dark:bg-zinc-600 shadow-sm' : 'opacity-65'}`}
                                   >Ida</button>
                                   <button 
                                     onClick={() => setDetailDirection('VOLTA')}
-                                    className={`px-3 py-1 rounded-md text-[8px] font-black uppercase transition-all ${detailDirection === 'VOLTA' ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'opacity-50'}`}
+                                    className={`flex-1 sm:flex-none px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${detailDirection === 'VOLTA' ? 'bg-white dark:bg-zinc-600 shadow-sm' : 'opacity-65'}`}
                                   >Volta</button>
                               </div>
                           </div>
 
                           {selectedRouteDetails.route_type === 'URBANO' ? (
-                              <div className="p-6 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40 rounded-3xl text-center text-[10px] font-black uppercase space-y-2">
+                              <div className="p-6 bg-red-50 dark:bg-red-950/20 text-red-650 dark:text-red-400 border border-red-200 dark:border-red-900/40 rounded-3xl text-center text-[10px] font-black uppercase space-y-2">
                                   <p className="font-extrabold text-xs">Rota Urbana</p>
                                   <p className="text-[9px] text-slate-500 dark:text-zinc-400 italic font-bold">As rotas urbanas não estão liberadas para venda de passagens antecipada ou autoatendimento. Pague diretamente ao operador a bordo do veículo.</p>
                               </div>
                           ) : (
-                              (() => {
-                                  const upcomingTripsForModal = trips
-                                      .filter(t => t.route_id === selectedRouteDetails.id && !t.finished && t.direction === detailDirection && t.departure_time >= currentTimeStr)
-                                      .sort((a, b) => a.departure_time.localeCompare(b.departure_time));
-                                  return (
-                                      <div className="grid grid-cols-1 gap-3">
-                                          {upcomingTripsForModal.length > 0 ? upcomingTripsForModal.map((t, tidx) => (
+                              <div className="grid grid-cols-1 gap-3">
+                                  {currentSchedules.length > 0 ? (
+                                      currentSchedules.map((item, sIdx) => {
+                                          const matchingTrip = trips.find(t => 
+                                              t.route_id === selectedRouteDetails.id &&
+                                              t.direction === detailDirection &&
+                                              t.trip_date === scheduleDate &&
+                                              t.departure_time === item.time &&
+                                              !t.finished
+                                          );
+
+                                          return (
                                               <div 
-                                                key={tidx} 
-                                                className="p-4 bg-slate-50 dark:bg-zinc-800/40 rounded-2xl border border-slate-150 dark:border-zinc-805 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                                                key={sIdx} 
+                                                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                                                  matchingTrip 
+                                                    ? 'bg-indigo-50/30 dark:bg-indigo-950/10 border-indigo-100 dark:border-indigo-900/30' 
+                                                    : 'bg-slate-50/50 dark:bg-zinc-805/20 border-slate-150 dark:border-zinc-800'
+                                                }`}
                                               >
                                                 <div className="flex-1 space-y-1.5 text-left">
                                                     <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="px-2.5 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-extrabold rounded-xl text-xs">{t.departure_time}</span>
-                                                        <span className="px-2 py-0.5 bg-yellow-400/20 text-yellow-700 dark:text-yellow-400 font-extrabold rounded-lg text-[9px] uppercase">Ônibus prefixo: {t.bus_number}</span>
+                                                        <span className="px-2.5 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-extrabold rounded-xl text-xs">{item.time}</span>
+                                                        {matchingTrip ? (
+                                                          <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold rounded-lg text-[9px] uppercase border border-emerald-500/20">Escala Ativa • Ônibus {matchingTrip.bus_number}</span>
+                                                        ) : (
+                                                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-405 font-bold rounded-lg text-[8px] uppercase">Previsto no Quadro</span>
+                                                        )}
                                                     </div>
-                                                    <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-extrabold uppercase">
-                                                        <span className="block">Motorista: {t.driver_name}</span>
-                                                        {t.conductor_name && <span className="block text-[9px] text-slate-400">Cobrador: {t.conductor_name}</span>}
-                                                    </div>
+                                                    {matchingTrip ? (
+                                                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-extrabold uppercase">
+                                                          <span className="block">Motorista: {matchingTrip.driver_name}</span>
+                                                          {matchingTrip.conductor_name && <span className="block text-[9px] text-slate-400">Cobrador: {matchingTrip.conductor_name}</span>}
+                                                      </div>
+                                                    ) : (
+                                                      <span className="block text-[9px] italic text-slate-400 font-semibold uppercase">Escala ainda não programada para este dia</span>
+                                                    )}
                                                 </div>
-                                                <button 
-                                                  onClick={() => {
-                                                      if (!isCardLoggedIn) {
-                                                          setLoginContext('PURCHASE');
-                                                          setShowCardLogin(true);
-                                                          addToast("Para comprar este horário, faça login ou cadastre-se.", "info");
-                                                      } else {
-                                                          onOpenTicketing(t.id, loggedInCard || undefined, selectedRouteDetails.id);
-                                                      }
-                                                  }}
-                                                  className="px-4 py-2.5 bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-slate-900 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
-                                                >
-                                                  <span>Comprar</span>
-                                                  <ShoppingCart size={13} className="text-white/70"/>
-                                                </button>
+                                                
+                                                {matchingTrip && (
+                                                  <button 
+                                                    onClick={() => handleBuyClick(matchingTrip.id, selectedRouteDetails.id)}
+                                                    className="px-4 py-2.5 bg-indigo-600 dark:bg-indigo-500 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
+                                                  >
+                                                    <span>Comprar</span>
+                                                    <ShoppingCart size={13} className="text-white/70"/>
+                                                  </button>
+                                                )}
                                               </div>
-                                          )) : (
-                                              <div className="py-8 text-center text-slate-400 text-[10px] font-black uppercase italic border border-dashed rounded-2xl">
-                                                  Sem escalas agendadas a partir do horário real na direção {detailDirection === 'IDA' ? 'Ida' : 'Volta'}
-                                              </div>
-                                          )}
+                                          );
+                                      })
+                                  ) : (
+                                      <div className="py-8 text-center text-slate-400 text-[10px] font-black uppercase italic border border-dashed rounded-2xl">
+                                          Sem horários programados neste dia para direção {detailDirection === 'IDA' ? 'Ida' : 'Volta'}
                                       </div>
-                                  );
-                              })()
+                                  )}
+                              </div>
                           )}
                       </div>
                   </div>
@@ -921,7 +994,21 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                                                                                 {t.conductor_name && <span>Cob: {t.conductor_name}</span>}
                                                                             </div>
                                                                         </div>
-                                                                        <span className="px-2 py-0.5 bg-yellow-400/15 text-yellow-600 dark:text-yellow-400 font-bold rounded text-[8px] uppercase self-start sm:self-auto">Ônibus: {t.bus_number}</span>
+                                                                        <div className="flex items-center gap-2 max-sm:w-full justify-between sm:justify-end">
+                                                                            <span className="px-2 py-0.5 bg-yellow-400/15 text-yellow-600 dark:text-yellow-400 font-bold rounded text-[8px] uppercase">Ônibus: {t.bus_number}</span>
+                                                                            {route.route_type !== 'URBANO' && (
+                                                                                <button 
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        handleBuyClick(t.id, route.id);
+                                                                                    }}
+                                                                                    className="px-2.5 py-1.5 bg-indigo-600 hover:bg-slate-900 active:scale-95 text-white font-black rounded-lg text-[8px] uppercase flex items-center gap-1 transition-all"
+                                                                                >
+                                                                                    <span>Comprar</span>
+                                                                                    <ShoppingCart size={11} className="text-white/80" />
+                                                                                </button>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 ))
                                                             ) : (
@@ -985,6 +1072,111 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                         )}
                     </div>
                 )}
+            {showThemePopup && (
+              <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200 text-slate-900 dark:text-zinc-100">
+                <div className="bg-white dark:bg-zinc-900 w-full max-w-md rounded-[2.5rem] shadow-2xl border-4 border-yellow-400 p-8 relative overflow-hidden transition-all animate-in zoom-in-95">
+                  {/* Header */}
+                  <div className="flex justify-between items-center pb-6 border-b border-slate-100 dark:border-zinc-800">
+                    <div className="flex items-center gap-2.5">
+                      <Palette className="text-yellow-400 animate-pulse" size={24} />
+                      <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-950 dark:text-white">Design e Cores</h2>
+                    </div>
+                    <button onClick={() => setShowThemePopup(false)} className="p-1.5 bg-slate-50 dark:bg-zinc-800 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 text-slate-400 hover:text-red-500 transition-all">
+                      <X size={20} />
+                    </button>
+                  </div>
+
+                  {/* Content */}
+                  <div className="mt-6 space-y-6">
+                    {/* Theme Preset Toggles */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Aparência do Painel</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button 
+                          type="button" 
+                          onClick={() => onChangeThemeMode?.('light')}
+                          className={`p-4 rounded-xl border-2 font-black uppercase text-[10px] tracking-wider transition-all flex items-center justify-center gap-2 ${themeMode === 'light' ? 'border-yellow-400 bg-yellow-50/20 text-slate-900' : 'border-slate-100 dark:border-zinc-800 text-slate-400 hover:border-slate-200 bg-transparent'}`}
+                        >
+                          <Sun size={16} className={themeMode === 'light' ? 'text-yellow-500' : ''} />
+                          Modo Claro
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => onChangeThemeMode?.('dark')}
+                          className={`p-4 rounded-xl border-2 font-black uppercase text-[10px] tracking-wider transition-all flex items-center justify-center gap-2 ${themeMode === 'dark' ? 'border-yellow-400 bg-yellow-400/10 text-white animate-pulse' : 'border-slate-100 dark:border-zinc-800 text-slate-400 hover:border-slate-805'}`}
+                        >
+                          <Moon size={16} className={themeMode === 'dark' ? 'text-yellow-400' : ''} />
+                          Modo Escuro
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Accessibility Options */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none">Acessibilidade</label>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          if (systemSettings && onUpdateSettings) {
+                            onUpdateSettings({ ...systemSettings, high_contrast: !systemSettings.high_contrast });
+                          }
+                        }}
+                        className={`p-4 rounded-xl border-2 font-black uppercase text-[10px] tracking-wider transition-all flex items-center justify-between w-full ${systemSettings?.high_contrast ? 'border-yellow-400 bg-yellow-400/10 text-slate-950 dark:text-yellow-400 font-black' : 'border-slate-100 dark:border-zinc-800 text-slate-400 hover:border-slate-200 bg-transparent'}`}
+                      >
+                        <span className="flex items-center gap-2 font-black">
+                          <span className="w-4 h-4 rounded-full border-2 border-current bg-transparent flex items-center justify-center text-[8px] font-black">A</span>
+                          Alto Contraste
+                        </span>
+                        <span className={`text-[8px] font-black px-2 py-1 rounded-lg uppercase ${systemSettings?.high_contrast ? 'bg-yellow-400 text-slate-950 border border-slate-950' : 'bg-slate-100 dark:bg-zinc-800 text-slate-400'}`}>
+                          {systemSettings?.high_contrast ? 'Ativado' : 'Desativado'}
+                        </span>
+                      </button>
+                      <p className="mt-2 text-[8px] font-bold text-slate-400 uppercase italic leading-tight ml-2">Melhora a legibilidade do sistema para passageiros e motoristas em ambientes externos.</p>
+                    </div>
+
+                    {/* Accent Color Palette Selector */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 tracking-widest leading-none block">Paleta de Cores Primária</label>
+                      <div className="grid grid-cols-1 gap-2 max-h-[160px] overflow-y-auto pr-1">
+                        {[
+                          { id: 'yellow', name: 'Amarelo Padrão (Nicolau)', bg: 'bg-[#facc15]' },
+                          { id: 'blue', name: 'Azul Corporativo', bg: 'bg-[#3b82f6]' },
+                          { id: 'indigo', name: 'Índigo Moderno', bg: 'bg-[#6366f1]' },
+                          { id: 'emerald', name: 'Verde Esmeralda', bg: 'bg-[#10b981]' },
+                          { id: 'rose', name: 'Rosa Elegante', bg: 'bg-[#ec4899]' }
+                        ].map(palette => {
+                          const isSelected = (systemSettings?.theme_color || 'yellow') === palette.id;
+                          return (
+                            <button
+                              type="button"
+                              key={palette.id}
+                              onClick={() => {
+                                if (systemSettings && onUpdateSettings) {
+                                  onUpdateSettings({ ...systemSettings, theme_color: palette.id });
+                                }
+                              }}
+                              className={`p-3 rounded-xl border-2 transition-all flex items-center justify-between w-full ${
+                                isSelected 
+                                  ? 'border-yellow-400 bg-slate-50 dark:bg-zinc-800/30' 
+                                  : 'border-slate-100 dark:border-zinc-800/60 hover:border-slate-300 dark:hover:border-zinc-700 bg-transparent'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`w-5 h-5 rounded-full ${palette.bg} shadow-md`} />
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-800 dark:text-zinc-200">{palette.name}</span>
+                              </div>
+                              {isSelected && (
+                                <span className="text-[8px] font-black uppercase tracking-widest text-[#eab308] dark:text-yellow-400 px-2.5 py-1 bg-yellow-400/10 rounded-lg">Selecionado</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
             </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Building2, PlayCircle, Users, DollarSign, Bus, TrendingUp, Clock, Calendar, ArrowRight, Search, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Building2, PlayCircle, Users, DollarSign, Bus, TrendingUp, Clock, Calendar, ArrowRight, Search, AlertTriangle, ExternalLink, Download } from 'lucide-react';
 import { Trip, BusRoute, Company, IssueReport, City, PassengerDetails, Subscription } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
@@ -12,6 +12,7 @@ interface DashboardProps {
   cities: City[];
   reports: IssueReport[];
   subscription?: Subscription | null;
+  onForceBackup?: () => void;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -57,7 +58,7 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
   </motion.div>
 );
 
-const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], companies = [], subscription }) => {
+const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], companies = [], subscription, onForceBackup }) => {
   const [filterCompanyId, setFilterCompanyId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -230,16 +231,26 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
               <h4 className="text-sm font-black text-red-600 uppercase tracking-tight">Atenção! Assinatura Expirando</h4>
               <p className="text-xs font-bold text-red-700/70 dark:text-red-400/70 leading-tight">
                 Sua assinatura do <span className="font-black">ViaLivre Gestão</span> expira em {daysUntilExpiration} {daysUntilExpiration === 1 ? 'dia' : 'dias'}. 
-                Reative seu plano agora para evitar o bloqueio de acesso para você e sua equipe.
+                Reative seu plano agora para evitar o bloqueio de acesso para você e sua equipe. Faça backup dos seus dados para segurança.
               </p>
             </div>
           </div>
-          <button 
-            onClick={() => window.dispatchEvent(new CustomEvent('change-view', { detail: 'my-subscription' }))}
-            className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-700 transition-all flex items-center gap-2 shadow-md active:scale-95 shrink-0"
-          >
-            Reativar Plano <ExternalLink size={14} />
-          </button>
+          <div className="flex items-center gap-3">
+            {onForceBackup && (
+              <button 
+                onClick={onForceBackup}
+                className="px-6 py-3 bg-yellow-400 text-slate-900 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-yellow-500 transition-all flex items-center gap-2 shadow-md active:scale-95 shrink-0 border-2 border-slate-900"
+              >
+                Cópia de Segurança (JSON) <Download size={14} />
+              </button>
+            )}
+            <button 
+              onClick={() => window.dispatchEvent(new CustomEvent('change-view', { detail: 'my-subscription' }))}
+              className="px-6 py-3 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-red-700 transition-all flex items-center gap-2 shadow-md active:scale-95 shrink-0"
+            >
+              Reativar Plano <ExternalLink size={14} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -248,12 +259,23 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
               <h2 className="text-2xl md:text-3xl font-black text-slate-800 dark:text-white uppercase italic leading-none">Visão Operacional</h2>
               <p className="text-[10px] text-yellow-600 font-black uppercase tracking-[0.3em] mt-2 border-l-2 border-yellow-400 pl-3">Dashboard em Tempo Real • {formatDateBr(new Date().toISOString().split('T')[0])}</p>
           </div>
-          <div className="bg-white dark:bg-zinc-900 p-2 rounded-2xl border dark:border-zinc-800 flex items-center gap-2">
-              <Building2 size={16} className="text-yellow-600 ml-2" />
-              <select className="bg-transparent text-[10px] font-black uppercase outline-none dark:text-zinc-300" value={filterCompanyId} onChange={e => setFilterCompanyId(e.target.value)}>
-                <option value="">Todo o Grupo</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+          <div className="flex flex-row items-center gap-3">
+              {onForceBackup && (
+                <button 
+                  onClick={onForceBackup}
+                  className="px-4 py-3 bg-slate-950 dark:bg-zinc-800 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest hover:bg-black dark:hover:bg-zinc-700 transition-all flex items-center gap-2 shadow-md border-2 border-slate-800 h-12"
+                  title="Exportar todos os dados do banco para um arquivo JSON local"
+                >
+                  Backup de Segurança <Download size={12} className="text-yellow-400" />
+                </button>
+              )}
+              <div className="bg-white dark:bg-zinc-900 p-2 rounded-2xl border border-slate-100 dark:border-zinc-800 flex items-center gap-2 h-12 shadow-sm">
+                  <Building2 size={16} className="text-yellow-600 ml-2" />
+                  <select className="bg-transparent text-[10px] font-black uppercase outline-none dark:text-zinc-300 pr-2" value={filterCompanyId} onChange={e => setFilterCompanyId(e.target.value)}>
+                    <option value="">Todo o Grupo</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+              </div>
           </div>
       </div>
 

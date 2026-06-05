@@ -54,18 +54,26 @@ const TicketVoucher: React.FC<TicketVoucherProps> = ({ type, lastTicket, selecte
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4 border-y-2 border-black py-6 mb-6">
-                <div className="text-center border-r-2 border-black px-2">
-                    <p className="text-[9px] font-bold uppercase">POLTRONA</p>
-                    <p className="text-3xl font-black">{lastTicket.seat_number.toString().padStart(2, '0')}</p>
+            <div className="grid grid-cols-5 gap-2 border-y-2 border-black py-4 mb-4 text-center">
+                <div className="border-r-2 border-black px-1">
+                    <p className="text-[8px] font-bold uppercase">POLTRONA</p>
+                    <p className="text-2xl font-black">{lastTicket.seat_number.toString().padStart(2, '0')}</p>
                 </div>
-                <div className="text-center border-r-2 border-black px-2">
-                    <p className="text-[9px] font-bold uppercase">CARRO</p>
-                    <p className="text-3xl font-black">{(selectedTrip?.bus_number || lastTicket.is_presale) ? `#${selectedTrip?.bus_number || 'PRE'}` : '---'}</p>
+                <div className="border-r-2 border-black px-1">
+                    <p className="text-[8px] font-bold uppercase">CARRO</p>
+                    <p className="text-2xl font-black">{(selectedTrip?.bus_number || lastTicket.is_presale) ? `#${selectedTrip?.bus_number || 'PRE'}` : '---'}</p>
                 </div>
-                <div className="text-center px-2">
-                    <p className="text-[9px] font-bold uppercase text-gray-400">TOTAL</p>
-                    <p className="text-3xl font-black tracking-tighter">R$ {lastTicket.total_price.toFixed(2)}</p>
+                <div className="border-r-2 border-black px-1">
+                    <p className="text-[8px] font-bold uppercase">PLATAFORMA</p>
+                    <p className="text-2xl font-black">{(selectedRoute?.origin_station_platform || '---').toUpperCase()}</p>
+                </div>
+                <div className="border-r-2 border-black px-1">
+                    <p className="text-[8px] font-bold uppercase">PREFIXO</p>
+                    <p className="text-2xl font-black">{(selectedRoute?.prefixo_linha || '---').toUpperCase()}</p>
+                </div>
+                <div className="px-1">
+                    <p className="text-[8px] font-bold uppercase text-gray-400">TOTAL</p>
+                    <p className="text-2xl font-black tracking-tighter">R$ {lastTicket.total_price.toFixed(2)}</p>
                 </div>
             </div>
 
