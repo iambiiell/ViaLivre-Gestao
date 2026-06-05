@@ -7,6 +7,38 @@ import { VIEW_LABELS } from '../constants';
 
 const SHIFTS = ['6x1', '5x1', '5x2', '12x36'];
 
+const ACCESSIBLE_VIEWS: ViewState[] = [
+  'operation-center',
+  'monitoring',
+  'dashboard',
+  'management',
+  'skins',
+  'reports-view',
+  'time-tracking',
+  'payroll',
+  'ticketing',
+  'ticketing-config',
+  'notices',
+  'observations',
+  'inspections',
+  'maintenance',
+  'companies',
+  'cities',
+  'routes',
+  'schedule',
+  'dispatcher',
+  'sac',
+  'work-with-us',
+  'vehicles',
+  'drivers',
+  'recruitment',
+  'users',
+  'subscriptions',
+  'my-subscription',
+  'notifications',
+  'about'
+];
+
 const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; currentUser: User | null }> = ({ addToast, currentUser }) => {
   const [activeTab, setActiveTab] = useState<'roles' | 'rubrics'>('roles');
   const [rubrics, setRubrics] = useState<PayrollRubric[]>([]);
@@ -84,13 +116,15 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
             updated_at: new Date().toISOString()
         };
 
-        const { error } = await supabase
-            .from('payroll_rubrics')
-            .upsert(rubricToSave, { onConflict: 'code' });
+        if (editingRubric.id) {
+            await db.update('payroll_rubrics', rubricToSave as PayrollRubric);
+            addToast("Rubrica atualizada com sucesso.", "success");
+        } else {
+            const newId = `rubric-${Date.now()}`;
+            await db.create('payroll_rubrics', { ...rubricToSave, id: newId });
+            addToast("Rubrica cadastrada com sucesso.", "success");
+        }
 
-        if (error) throw error;
-
-        addToast("Rubrica da ViaLivre Gestão salva ou atualizada com sucesso.", "success");
         setIsModalOpen(false);
         await loadData();
     } catch (e) {
@@ -108,17 +142,7 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
     }
     setIsLoading(true);
     try {
-      let query = supabase.from('role_configs').delete().eq('id', id);
-      
-      if (currentUser?.system_id) {
-        query = query.eq('system_id', currentUser.system_id);
-      }
-
-      const { error } = await query;
-      if (error) {
-        addToast(error.message, 'error');
-        throw error;
-      }
+      await db.delete('role_configs', id);
       addToast('Cargo excluído com sucesso!', 'success');
       setRoles(prev => prev.filter(role => role.id !== id)); // Immediate UI update
     } catch (error) {
@@ -136,17 +160,7 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
     }
     setIsLoading(true);
     try {
-      let query = supabase.from('payroll_rubrics').delete().eq('id', id);
-      
-      if (currentUser?.system_id) {
-        query = query.eq('system_id', currentUser.system_id);
-      }
-
-      const { error } = await query;
-      if (error) {
-        addToast(error.message, 'error');
-        throw error;
-      }
+      await db.delete('payroll_rubrics', id);
       addToast('Rubrica excluída com sucesso!', 'success');
       setRubrics(prev => prev.filter(rubric => rubric.id !== id)); // Immediate UI update
     } catch (error) {
@@ -263,7 +277,7 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
                                 <span className="text-[11px] font-black text-slate-600 dark:text-zinc-400 uppercase tracking-widest">Escala: {role.standard_shift}</span>
                             </div>
                         </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity items-center">
+                        <div className="flex gap-1 items-center">
                             <button onClick={() => { setEditingRole({ ...role, permissions: Array.isArray(role.permissions) ? role.permissions : [] }); setIsRoleModalOpen(true); }} className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-lg"><Edit3 size={16}/></button>
                             
                             {deletingRoleId === role.id ? (
@@ -368,7 +382,7 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
                                             </span>
                                         </td>
                                         <td className="px-8 py-5 text-right">
-                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity items-center">
+                                            <div className="flex justify-end gap-2 items-center">
                                                 <button onClick={() => { setEditingRubric(rubric); setIsModalOpen(true); }} className="p-3 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-xl transition-all"><Edit3 size={18}/></button>
                                                 
                                                 {deletingRubricId === rubric.id ? (
@@ -458,7 +472,27 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
                       <div>
                           <label className="block text-[10px] font-black text-slate-400 uppercase mb-4 ml-2">Permissões de Acesso (Abas do Sistema)</label>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                              {(Object.keys(VIEW_LABELS) as ViewState[]).map(view => {
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                    const allSelected = ACCESSIBLE_VIEWS.every(v => editingRole?.permissions?.includes(v));
+                                    if (allSelected) {
+                                        setEditingRole({...editingRole, permissions: []});
+                                    } else {
+                                        setEditingRole({...editingRole, permissions: [...ACCESSIBLE_VIEWS]});
+                                    }
+                                }}
+                                className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                                    ACCESSIBLE_VIEWS.every(v => editingRole?.permissions?.includes(v))
+                                        ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-200'
+                                        : 'border-dashed border-slate-300 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 font-bold'
+                                }`}
+                              >
+                                  {ACCESSIBLE_VIEWS.every(v => editingRole?.permissions?.includes(v)) ? <CheckSquare size={16} className="text-indigo-600 dark:text-indigo-400"/> : <Square size={16}/>}
+                                  <span className="text-[9px] font-black uppercase truncate">TODAS AS ABAS</span>
+                              </button>
+
+                              {ACCESSIBLE_VIEWS.map(view => {
                                   const isSelected = editingRole?.permissions?.includes(view);
                                   return (
                                       <button 

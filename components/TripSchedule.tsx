@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Trip, BusRoute, User, Vehicle, TripStatus, TicketSale, UserFine } from '../types';
-import { Clock, User as UserIcon, Bus, ArrowRight, Pencil, Plus, X, Save, Trash2, Calendar, Search, CheckCircle2, DollarSign, Users, Loader2, ShieldCheck, Copy, AlertTriangle, List, ShieldAlert, UserCheck, PlayCircle, Ticket, Hash, Printer, Ban } from 'lucide-react';
+import { Trip, BusRoute, User, Vehicle, TripStatus, TicketSale, UserFine, Company } from '../types';
+import { Clock, User as UserIcon, Bus, ArrowRight, Pencil, Plus, X, Save, Trash2, Calendar, Search, CheckCircle2, DollarSign, Users, Loader2, ShieldCheck, Copy, AlertTriangle, List, ShieldAlert, UserCheck, PlayCircle, Ticket, Hash, Printer, Ban, FileText } from 'lucide-react';
 import { db } from '../services/database';
 
 interface TripScheduleProps {
@@ -9,6 +9,7 @@ interface TripScheduleProps {
   routes: BusRoute[];
   drivers: User[];
   vehicles: Vehicle[];
+  companies?: Company[];
   currentUser: User | null;
   onAddTrip: (trip: Trip) => void;
   onUpdateTrip: (trip: Trip) => void;
@@ -442,6 +443,132 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
 
   }, [filteredTrips, filterRouteId, filterDirection, filterDate, routes]);
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+    addToast("Gerando relatório em PDF...", "warning");
+    try {
+      const loadHtml2Pdf = async () => {
+        if ((window as any).html2pdf) return (window as any).html2pdf;
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+          script.onload = () => resolve((window as any).html2pdf);
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+      };
+
+      const html2pdf = await loadHtml2Pdf();
+
+      const tripsToExport = displayItems
+        .filter(item => item.type === 'trip')
+        .map(item => item.data);
+
+      const formattedDate = filterDate.split('-').reverse().join('/');
+      const companyLabel = filterCompanyId 
+        ? (companies.find(c => c.id === filterCompanyId)?.nome_fantasia || companies.find(c => c.id === filterCompanyId)?.name || 'Empresa Filtrada') 
+        : 'Todas as Empresas';
+
+      const printContainer = document.createElement('div');
+      printContainer.style.padding = '30px';
+      printContainer.style.fontFamily = '"Helvetica Neue", "Arial", sans-serif';
+      printContainer.style.color = '#0f172a';
+      printContainer.style.backgroundColor = '#ffffff';
+
+      printContainer.innerHTML = `
+        <div style="border-bottom: 4px solid #EAB308; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h1 style="font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: -0.05em; margin: 0; color: #0f172a;">VIALIVRE • GESTÃO DE FROTAS</h1>
+            <p style="font-size: 10px; font-weight: 700; text-transform: uppercase; margin: 4px 0 0 0; color: #EAB308;">RELATÓRIO OFICIAL DE ESCALA OPERACIONAL</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="font-size: 10px; font-weight: 800; margin: 0; text-transform: uppercase; color: #475569;">DATA: <span style="color: #0f172a;">${formattedDate}</span></p>
+            <p style="font-size: 9px; font-weight: 700; margin: 2px 0 0 0; text-transform: uppercase; color: #64748b;">GRUPO: <span style="color: #0f172a;">${companyLabel}</span></p>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 15px; display: flex; justify-content: space-between; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase;">
+          <div>TOTAL DE VIAGENS NA ESCALA: <span style="color: #0f172a; font-weight: 900;">${tripsToExport.length}</span></div>
+          <div>Gerado em ${new Date().toLocaleString('pt-BR')}</div>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; font-size: 9px; text-align: left;">
+          <thead>
+            <tr style="background-color: #0f172a; color: #ffffff;">
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 8%;">PARTIDA</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 8%;">SENTIDO</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 28%;">ITINERÁRIO / LINHA</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 10%;">VEÍCULO</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 16%;">MOTORISTA</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 12%;">COBRADOR</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 12%;">FISCAL</th>
+              <th style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; text-transform: uppercase; width: 8%;">STATUS</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tripsToExport.map((t, idx) => {
+              const route = routes.find(r => r.id === t.route_id);
+              const isEven = idx % 2 === 0;
+              const bgColor = isEven ? '#f8fafc' : '#ffffff';
+              
+              const directionStyle = t.direction === 'IDA' 
+                ? 'background-color: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;' 
+                : 'background-color: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe;';
+              
+              let statusStyle = '';
+              if (t.status === 'Em Rota') statusStyle = 'color: #d97706; font-weight: 900; text-transform: uppercase;';
+              else if (t.status === 'Concluída') statusStyle = 'color: #059669; font-weight: 900; text-transform: uppercase;';
+              else if (t.status === 'Atrasada') statusStyle = 'color: #dc2626; font-weight: 900; text-transform: uppercase;';
+              else statusStyle = 'color: #475569; font-weight: 800; text-transform: uppercase;';
+
+              return `
+                <tr style="background-color: ${bgColor};">
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 900; font-family: monospace; font-size: 10px;">${t.departure_time}</td>
+                  <td style="padding: 4px 10px; border: 1px solid #cbd5e1; text-align: center;">
+                    <span style="${directionStyle} padding: 2px 6px; font-size: 8px; font-weight: 900; border-radius: 4px; display: inline-block;">${t.direction || 'IDA'}</span>
+                  </td>
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 700; color: #1e293b;">${route ? `${route.prefixo_linha} - ${route.origin} x ${route.destination}` : 'Linha Não Cadastrada'}</td>
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 800; font-family: monospace; color: #0f172a;">VEÍCULO #${t.bus_number}</td>
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; font-weight: 700; text-transform: uppercase; color: #0f172a;">${t.driver_name || 'NÃO ATRIBUÍDO'}</td>
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; text-transform: uppercase; color: #475569;">${t.conductor_name || '---'}</td>
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; text-transform: uppercase; color: #475569;">${t.fiscal_name || '---'}</td>
+                  <td style="padding: 8px 10px; border: 1px solid #cbd5e1; ${statusStyle}">${t.status}</td>
+                </tr>
+              `;
+            }).join('')}
+            ${tripsToExport.length === 0 ? `
+              <tr>
+                <td colspan="8" style="padding: 25px; text-align: center; color: #94a3b8; font-weight: bold; font-style: italic; font-size: 11px; border: 1px solid #cbd5e1;">Nenhuma programação cadastrada para esta data ou filtros aplicados.</td>
+              </tr>
+            ` : ''}
+          </tbody>
+        </table>
+
+        <div style="margin-top: 30px; border-top: 1px dashed #cbd5e1; padding-top: 15px; text-align: center; color: #94a3b8; font-size: 8px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;">
+          VIALIVRE SISTEMA DE MONITORAMENTO DE TRANSPORTE COLETIVO • EXPEDIDO OFICIALMENTE PELO APPLET
+        </div>
+      `;
+
+      const options = {
+        margin: 10,
+        filename: `escala_${filterDate}_vialivre.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+      };
+
+      await html2pdf().from(printContainer).set(options).save();
+      addToast("Escala exportada em PDF com sucesso!", "success");
+    } catch (err) {
+      console.error(err);
+      addToast("Erro ao exportar a escala.", "error");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-32 transition-colors">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white dark:bg-zinc-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 transition-colors">
@@ -495,7 +622,17 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
                   <input type="date" className="pl-6 pr-4 py-4 bg-slate-50 dark:bg-zinc-900 rounded-2xl text-sm font-bold dark:text-zinc-100 border-none shadow-inner" value={filterDate || ''} onChange={(e) => setFilterDate(e.target.value)} />
               </div>
           </div>
-          <button onClick={() => { setEditingId(null); setFormData({ trip_date: filterDate, status: 'Agendada', departure_time: '00:00', company_id: filterCompanyId, ignore_company_filter: ignoreCompanyFilter, passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } } }); setIsModalOpen(true); }} className="w-full md:w-auto px-10 py-5 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-slate-900"><Plus size={20} /> Adicionar Programação</button>
+          <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto shrink-0">
+            <button 
+              onClick={handleExportPDF} 
+              disabled={isExporting}
+              className="px-8 py-5 bg-indigo-600 hover:bg-slate-800 disabled:opacity-50 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-indigo-900"
+            >
+              {isExporting ? <Loader2 className="animate-spin" size={20} /> : <FileText size={20} />} 
+              Exportar Escala
+            </button>
+            <button onClick={() => { setEditingId(null); setFormData({ trip_date: filterDate, status: 'Agendada', departure_time: '00:00', company_id: filterCompanyId, ignore_company_filter: ignoreCompanyFilter, passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } } }); setIsModalOpen(true); }} className="px-8 py-5 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-all border-2 border-slate-900"><Plus size={20} /> Adicionar Programação</button>
+          </div>
       </div>
 
       <div className="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory md:grid md:grid-cols-1 xl:grid-cols-2 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">

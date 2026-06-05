@@ -144,7 +144,7 @@ const ObservationManager: React.FC<ObservationManagerProps> = ({ reports = [], t
                                 <h3 className="font-black text-slate-800 dark:text-zinc-100 uppercase text-xs">{item.type || 'Ocorrência'}</h3>
                                 <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">{new Date(item.timestamp).toLocaleDateString('pt-BR')}</span>
                             </div>
-                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <div className="flex gap-1 items-center">
                                 <button onClick={() => setEditingReport(item)} className="p-2 text-slate-300 hover:text-indigo-500"><Edit3 size={16}/></button>
                                 <button onClick={() => onDeleteReport(item.id)} className="p-2 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
                             </div>

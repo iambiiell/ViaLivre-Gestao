@@ -9,6 +9,7 @@ interface CompanyManagerProps {
   companies: Company[];
   ticketBooths: TicketBooth[];
   currentUser: User | null;
+  users?: User[];
   onAddCompany: (company: Company) => void;
   onUpdateCompany: (company: Company) => void;
   onDeleteCompany: (id: string) => void;
@@ -21,6 +22,7 @@ interface CompanyManagerProps {
 const CompanyManager: React.FC<CompanyManagerProps> = ({ 
     companies = [], 
     ticketBooths = [],
+    users = [],
     onAddCompany, 
     onUpdateCompany, 
     onDeleteCompany, 
@@ -38,11 +40,11 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
   const [errors, setErrors] = useState<Set<string>>(new Set());
   
   const [formData, setFormData] = useState<Partial<Company>>({ 
-    active: true, name: '', razao_social: '', nome_fantasia: '', cnpj: '', ie: '', contact_email: '', contact_phone: ''
+    active: true, name: '', razao_social: '', nome_fantasia: '', cnpj: '', ie: '', cep: '', contact_email: '', contact_phone: ''
   });
 
   const [boothData, setBoothData] = useState<Partial<TicketBooth>>({
-    active: true, name: '', cnpj: '', address_street: '', address_number: '', address_neighborhood: '',
+    active: true, name: '', cnpj: '', cep: '', address_street: '', address_number: '', address_neighborhood: '',
     address_city: '', address_state: '', address_complement: '', phone: '', email: '', booth_manager: ''
   });
 
@@ -56,9 +58,15 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
       .sort((a, b) => (a.nome_fantasia || a.name || '').localeCompare(b.nome_fantasia || b.name || ''));
   }, [companies, searchTerm]);
 
+  const managerCollaborators = useMemo(() => {
+    return (users || []).filter(u => 
+      u.job_title && u.job_title.toLowerCase().includes('gerente')
+    );
+  }, [users]);
+
   const filteredBooths = useMemo(() => {
     return (ticketBooths || [])
-        .filter(b => b.name.toLowerCase().includes(searchTerm.toLowerCase()) || b.cnpj.includes(searchTerm))
+        .filter(b => (b.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || (b.cnpj || '').includes(searchTerm))
         .sort((a, b) => a.name.localeCompare(b.name));
   }, [ticketBooths, searchTerm]);
 
@@ -84,7 +92,7 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
         } else {
             setEditingId(null);
             setBoothData({
-                active: true, name: '', cnpj: '', phone: '', email: '', 
+                active: true, name: '', cnpj: '', phone: '', email: '', cep: '',
                 address_street: '', address_number: '', address_neighborhood: '',
                 address_city: '', address_state: '', address_complement: '',
                 booth_manager: '', company_id: companies.length > 0 ? companies[0].id : undefined
@@ -97,7 +105,7 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
   const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = cepMask(e.target.value);
     if (activeTab === 'COMPANIES') setFormData(prev => ({ ...prev, cep: val }));
-    else setBoothData(prev => ({ ...prev, address_complement: val })); 
+    else setBoothData(prev => ({ ...prev, cep: val })); 
     
     const clean = val.replace(/\D/g, '');
     if (clean.length === 8) {
@@ -241,14 +249,37 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Email Operacional *</label>
                         <input className={inputClass('contact_email')} value={formData.contact_email || ''} onChange={e => setFormData({...formData, contact_email: e.target.value})} />
                     </div>
-                    <div className="col-span-full grid grid-cols-2 gap-4">
-                        <div className="relative">
-                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">CEP *</label>
-                            <input className={inputClass('cep')} value={formData.cep || ''} onChange={handleCepChange} placeholder="00.000-000" />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Número *</label>
-                            <input className={inputClass('address_number')} value={formData.address_number || ''} onChange={e => setFormData({...formData, address_number: e.target.value})} />
+                    <div className="col-span-full border-t border-slate-100 dark:border-zinc-800 pt-4">
+                        <p className="text-[9px] font-black uppercase text-slate-400 mb-4 ml-2">Endereço da Empresa</p>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="relative">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">CEP *</label>
+                                <input className={inputClass('cep')} value={formData.cep || ''} onChange={handleCepChange} placeholder="00.000-000" />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Logradouro</label>
+                                <input className={inputClass('address_street')} value={formData.address_street || ''} onChange={e => setFormData({...formData, address_street: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Número *</label>
+                                <input className={inputClass('address_number')} value={formData.address_number || ''} onChange={e => setFormData({...formData, address_number: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Bairro</label>
+                                <input className={inputClass('address_neighborhood')} value={formData.address_neighborhood || ''} onChange={e => setFormData({...formData, address_neighborhood: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Cidade</label>
+                                <input className={inputClass('address_city')} value={formData.address_city || ''} onChange={e => setFormData({...formData, address_city: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Estado</label>
+                                <input className={inputClass('address_state')} value={formData.address_state || ''} onChange={e => setFormData({...formData, address_state: e.target.value})} />
+                            </div>
+                            <div className="col-span-full hidden">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Complemento</label>
+                                <input className={inputClass('address_complement')} value={formData.address_complement || ''} onChange={e => setFormData({...formData, address_complement: e.target.value})} />
+                            </div>
                         </div>
                     </div>
                   </div>
@@ -271,7 +302,18 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Gerente Responsável</label>
-                        <input className={inputClass('booth_manager')} value={boothData.booth_manager || ''} onChange={e => setBoothData({...boothData, booth_manager: e.target.value})} />
+                        <select 
+                            className={inputClass('booth_manager')} 
+                            value={boothData.booth_manager || ''} 
+                            onChange={e => setBoothData({...boothData, booth_manager: e.target.value})}
+                        >
+                            <option value="">Selecione um Gerente...</option>
+                            {managerCollaborators.map(m => (
+                                <option key={m.id} value={m.full_name || m.name || ''}>
+                                    {m.full_name || m.name} ({m.job_title})
+                                </option>
+                            ))}
+                        </select>
                     </div>
                     <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Telefone *</label>
@@ -284,13 +326,21 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
                     <div className="col-span-full border-t border-slate-100 dark:border-zinc-800 pt-4">
                         <p className="text-[9px] font-black uppercase text-slate-400 mb-4 ml-2">Endereço da Agência</p>
                         <div className="grid grid-cols-2 gap-4">
+                            <div className="relative">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">CEP *</label>
+                                <input className={inputClass('cep')} value={boothData.cep || ''} onChange={handleCepChange} placeholder="00.000-000" />
+                            </div>
                             <div>
                                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Logradouro</label>
                                 <input className={inputClass('address_street')} value={boothData.address_street || ''} onChange={e => setBoothData({...boothData, address_street: e.target.value})} />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Número</label>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Número *</label>
                                 <input className={inputClass('address_number')} value={boothData.address_number || ''} onChange={e => setBoothData({...boothData, address_number: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Bairro</label>
+                                <input className={inputClass('address_neighborhood')} value={boothData.address_neighborhood || ''} onChange={e => setBoothData({...boothData, address_neighborhood: e.target.value})} />
                             </div>
                             <div>
                                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Cidade</label>
@@ -299,6 +349,10 @@ const CompanyManager: React.FC<CompanyManagerProps> = ({
                             <div>
                                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Estado</label>
                                 <input className={inputClass('address_state')} value={boothData.address_state || ''} onChange={e => setBoothData({...boothData, address_state: e.target.value})} />
+                            </div>
+                            <div className="col-span-full hidden">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Complemento</label>
+                                <input className={inputClass('address_complement')} value={boothData.address_complement || ''} onChange={e => setBoothData({...boothData, address_complement: e.target.value})} />
                             </div>
                         </div>
                     </div>

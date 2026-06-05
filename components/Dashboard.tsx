@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { Building2, PlayCircle, Users, DollarSign, Bus, TrendingUp, Clock, Calendar, ArrowRight, Search, AlertTriangle, ExternalLink } from 'lucide-react';
 import { Trip, BusRoute, Company, IssueReport, City, PassengerDetails, Subscription } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 
 interface DashboardProps {
   allTrips: Trip[];
@@ -21,9 +21,10 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="text-yellow-400 font-black mb-1">{`Horário: ${label}`}</p>
         {payload.map((item: any, idx: number) => {
           const isRev = item.name === 'Faturamento Líquido';
+          const isOcc = item.name === 'Ocupação Média';
           return (
             <p key={idx} style={{ color: item.color }} className="font-bold">
-              {item.name}: {isRev ? `R$ ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : item.value}
+              {item.name}: {isRev ? `R$ ${item.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : isOcc ? `${item.value} pax/viagem` : item.value}
             </p>
           );
         })}
@@ -144,6 +145,65 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
       .map(key => hoursMap[key]);
   }, [allTrips, routes, filterCompanyId]);
 
+  const averageOccupancyData = useMemo(() => {
+    const hoursMap: Record<string, { hour: string; totalPassengers: number; tripCount: number }> = {};
+    
+    // Initialize standard operating hours (05:00 to 23:00)
+    for (let h = 5; h <= 23; h++) {
+      const hStr = h.toString().padStart(2, '0');
+      hoursMap[hStr] = {
+        hour: `${hStr}:00`,
+        totalPassengers: 0,
+        tripCount: 0
+      };
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    let filteredTrips = allTrips.filter(t => 
+      t.trip_date.split('T')[0] === today && 
+      (!filterCompanyId || routes.find(r => r.id === t.route_id)?.company_id === filterCompanyId)
+    );
+
+    // Fallback: If today's trips are empty or have zero passenger entries, 
+    // fall back to grouping all loaded trips to ensure the chart is populated!
+    if (filteredTrips.length === 0 || filteredTrips.every(t => !t.passengers || Object.keys(t.passengers).length === 0)) {
+      filteredTrips = allTrips.filter(t => 
+        !filterCompanyId || routes.find(r => r.id === t.route_id)?.company_id === filterCompanyId
+      );
+    }
+
+    filteredTrips.forEach(trip => {
+      const hourPart = trip.departure_time ? trip.departure_time.split(':')[0] : '00';
+      if (!hoursMap[hourPart]) {
+        hoursMap[hourPart] = {
+          hour: `${hourPart}:00`,
+          totalPassengers: 0,
+          tripCount: 0
+        };
+      }
+
+      let paxInTrip = 0;
+      Object.values(trip.passengers || {}).forEach((p: any) => {
+        paxInTrip += (p.pagantes || 0) + (p.vale_transporte || 0) + (p.imp_card || 0) + (p.gratuitos || 0);
+      });
+
+      hoursMap[hourPart].totalPassengers += paxInTrip;
+      hoursMap[hourPart].tripCount += 1;
+    });
+
+    return Object.keys(hoursMap)
+      .sort((a, b) => parseInt(a) - parseInt(b))
+      .map(key => {
+        const item = hoursMap[key];
+        const avg = item.tripCount > 0 ? parseFloat((item.totalPassengers / item.tripCount).toFixed(1)) : 0;
+        return {
+          hour: item.hour,
+          occupancy: avg,
+          tripCount: item.tripCount
+        };
+      });
+  }, [allTrips, routes, filterCompanyId]);
+
   const activeTodayTrips = useMemo(() => {
       const today = new Date().toISOString().split('T')[0];
       return allTrips.filter(t => {
@@ -210,7 +270,7 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
       </div>
 
       {/* Painel Gráfico de Demanda e Receita */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
         {/* Gráfico 1: Passageiros por Hora (Ocupação) */}
         <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-zinc-800 shadow-sm flex flex-col h-[400px]">
           <div className="flex justify-between items-center mb-6">
@@ -263,6 +323,31 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
                 <Tooltip content={<CustomTooltip />} />
                 <Bar dataKey="revenue" name="Faturamento Líquido" fill="#10B981" radius={[6, 6, 0, 0]} />
               </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfico 3: Ocupação Média por Horário */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] p-8 border border-slate-100 dark:border-zinc-800 shadow-sm flex flex-col h-[400px] lg:col-span-2 xl:col-span-1">
+          <div className="flex justify-between items-center mb-6">
+            <div>
+              <p className="text-[9px] font-black text-slate-400 dark:text-zinc-500 uppercase tracking-widest leading-none mb-1">Média por Horário</p>
+              <h4 className="text-sm font-black text-slate-800 dark:text-zinc-100 uppercase italic">Ocupação Média da Frota (Pax/Partida)</h4>
+            </div>
+            <span className="p-3 bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 rounded-2xl border border-indigo-200 dark:border-indigo-900/30">
+              <TrendingUp size={20} />
+            </span>
+          </div>
+
+          <div className="flex-1 w-full min-h-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={averageOccupancyData} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" className="dark:stroke-zinc-800/50" />
+                <XAxis dataKey="hour" fontSize={8} fontWeight="bold" stroke="#94A3B8" />
+                <YAxis fontSize={8} fontWeight="bold" stroke="#94A3B8" />
+                <Tooltip content={<CustomTooltip />} />
+                <Line type="monotone" dataKey="occupancy" name="Ocupação Média" stroke="#6366F1" strokeWidth={3} dot={{ stroke: '#6366F1', strokeWidth: 2, r: 3 }} activeDot={{ r: 6 }} />
+              </LineChart>
             </ResponsiveContainer>
           </div>
         </div>

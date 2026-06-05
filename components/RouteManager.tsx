@@ -309,84 +309,86 @@ const RouteManager: React.FC<RouteManagerProps> = ({
       {/* Statistics Modal */}
       <AnimatePresence>
         {showStatsModal && statsRoute && (
-          <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 z-[120] flex items-center justify-center p-4 backdrop-blur-md">
+          <div className="modal-container route-stats-popup fixed inset-0 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 z-[200] backdrop-blur-md">
             <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-[3rem] shadow-2xl flex flex-col border-4 border-indigo-400 overflow-hidden"
+               initial={{ opacity: 0, scale: 0.9, y: 20 }}
+               animate={{ opacity: 1, scale: 1, y: 0 }}
+               exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="w-full max-w-2xl"
             >
-              <div className="p-8 border-b-2 border-indigo-400 bg-slate-50 dark:bg-zinc-900 flex justify-between items-center">
-                  <div>
-                    <h3 className="text-xl font-black text-slate-900 dark:text-zinc-100 uppercase italic">Estatísticas da Rota</h3>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{statsRoute.prefixo_linha} - {statsRoute.origin} x {statsRoute.destination}</p>
-                  </div>
-                  <button onClick={() => setShowStatsModal(false)} className="text-slate-400 hover:rotate-90 transition-transform"><X size={32}/></button>
-              </div>
+              <div className="max-h-[90vh] overflow-y-auto w-full max-w-2xl bg-white dark:bg-zinc-950 rounded-[3rem] shadow-2xl flex flex-col border-4 border-indigo-400 overflow-hidden">
+                <div className="p-8 border-b-2 border-indigo-400 bg-slate-50 dark:bg-zinc-900 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900 dark:text-zinc-100 uppercase italic">Estatísticas da Rota</h3>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{statsRoute.prefixo_linha} - {statsRoute.origin} x {statsRoute.destination}</p>
+                    </div>
+                    <button onClick={() => { setShowStatsModal(false); setStatsRoute(null); }} className="text-slate-400 hover:rotate-90 transition-transform"><X size={32}/></button>
+                </div>
 
-              <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950">
-                {statsLoading ? (
-                  <div className="flex flex-col items-center justify-center py-12 gap-4">
-                    <Activity className="animate-spin text-indigo-500" size={48} />
-                    <p className="text-sm font-black text-slate-400 uppercase italic">Calculando métricas...</p>
-                  </div>
-                ) : (
-                  <div className="space-y-8">
-                    {/* Metrics Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 text-center">
-                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <Activity size={24} />
+                <div className="p-8 space-y-8 bg-white dark:bg-zinc-950 flex-1">
+                  {statsLoading ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-4">
+                      <Activity className="animate-spin text-indigo-500" size={48} />
+                      <p className="text-sm font-black text-slate-400 uppercase italic">Calculando métricas...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-8">
+                      {/* Metrics Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 text-center">
+                          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Activity size={24} />
+                          </div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Viagens Realizadas</p>
+                          <p className="text-2xl font-black text-slate-900 dark:text-zinc-100">{routeMetrics.totalTrips}</p>
                         </div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Viagens Realizadas</p>
-                        <p className="text-2xl font-black text-slate-900 dark:text-zinc-100">{routeMetrics.totalTrips}</p>
+                        <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 text-center">
+                          <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <Users size={24} />
+                          </div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Passageiros</p>
+                          <p className="text-2xl font-black text-slate-900 dark:text-zinc-100">{routeMetrics.totalPassengers}</p>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 text-center">
+                          <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                            <DollarSign size={24} />
+                          </div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Receita Gerada</p>
+                          <p className="text-2xl font-black text-emerald-600 italic">R$ {routeMetrics.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        </div>
                       </div>
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 text-center">
-                        <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <Users size={24} />
+
+                      {/* Recent Sales List */}
+                      <div className="space-y-4">
+                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                          <ListChecks size={14} /> Vendas Recentes nesta Rota
+                        </h4>
+                        <div className="space-y-2">
+                          {routeMetrics.recentSales.length === 0 ? (
+                             <div className="text-center py-8 bg-slate-50 dark:bg-zinc-900 rounded-2xl text-slate-400 text-[10px] font-black uppercase italic">Nenhuma venda registrada para esta rota</div>
+                          ) : (
+                            routeMetrics.recentSales.map(sale => (
+                              <div key={sale.id} className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 flex justify-between items-center transition-all hover:border-indigo-400">
+                                <div>
+                                  <p className="text-[10px] font-black text-slate-900 dark:text-zinc-100 uppercase">{sale.passenger_name}</p>
+                                  <p className="text-[8px] font-black text-slate-400 uppercase">{new Date(sale.created_at).toLocaleDateString()} {sale.departure_time || ''}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] font-black text-emerald-600">R$ {(Number(sale.total_price || 0)).toFixed(2)}</p>
+                                  <p className="text-[8px] font-black text-slate-500 uppercase">{sale.payment_method}</p>
+                                </div>
+                              </div>
+                            ))
+                          )}
                         </div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Passageiros</p>
-                        <p className="text-2xl font-black text-slate-900 dark:text-zinc-100">{routeMetrics.totalPassengers}</p>
-                      </div>
-                      <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border-2 border-slate-100 dark:border-zinc-800 text-center">
-                        <div className="w-12 h-12 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                          <DollarSign size={24} />
-                        </div>
-                        <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Receita Gerada</p>
-                        <p className="text-2xl font-black text-emerald-600 italic">R$ {routeMetrics.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                       </div>
                     </div>
+                  )}
+                </div>
 
-                    {/* Recent Sales List */}
-                    <div className="space-y-4">
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <ListChecks size={14} /> Vendas Recentes nesta Rota
-                      </h4>
-                      <div className="space-y-2">
-                        {routeMetrics.recentSales.length === 0 ? (
-                          <div className="text-center py-8 bg-slate-50 dark:bg-zinc-900 rounded-2xl text-slate-400 text-[10px] font-black uppercase italic">Nenhuma venda registrada para esta rota</div>
-                        ) : (
-                          routeMetrics.recentSales.map(sale => (
-                            <div key={sale.id} className="bg-slate-50 dark:bg-zinc-900 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 flex justify-between items-center transition-all hover:border-indigo-400">
-                              <div>
-                                <p className="text-[10px] font-black text-slate-900 dark:text-zinc-100 uppercase">{sale.passenger_name}</p>
-                                <p className="text-[8px] font-black text-slate-400 uppercase">{new Date(sale.created_at).toLocaleDateString()} {sale.departure_time}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-[10px] font-black text-emerald-600">R$ {sale.total_price.toFixed(2)}</p>
-                                <p className="text-[8px] font-black text-slate-500 uppercase">{sale.payment_method}</p>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-8 border-t-2 border-indigo-400 bg-slate-50 dark:bg-zinc-900 flex justify-center">
-                  <button onClick={() => setShowStatsModal(false)} className="px-12 py-4 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs shadow-xl border-2 border-indigo-900 flex items-center justify-center gap-2">Fechar Relatório</button>
+                <div className="p-8 border-t-2 border-indigo-400 bg-slate-50 dark:bg-zinc-900 flex justify-center">
+                    <button onClick={() => { setShowStatsModal(false); setStatsRoute(null); }} className="px-12 py-4 bg-indigo-600 text-white rounded-[2rem] font-black uppercase text-xs shadow-xl border-2 border-indigo-900 flex items-center justify-center gap-2">Fechar Relatório</button>
+                </div>
               </div>
             </motion.div>
           </div>
@@ -579,7 +581,7 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                                     newSections.splice(idx, 1);
                                                     setFormData({ ...formData, sections: newSections });
                                                 }}
-                                                className="p-3 bg-red-50 text-red-600 rounded-xl opacity-0 group-hover:opacity-100 transition-all hover:bg-red-600 hover:text-white"
+                                                className="p-3 bg-red-50 text-red-600 rounded-xl transition-all hover:bg-red-600 hover:text-white"
                                             >
                                                 <Trash2 size={16}/>
                                             </button>

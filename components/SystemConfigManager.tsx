@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Save, Loader2, CheckCircle2, AlertTriangle, Settings2, Users, Key, Calendar, CreditCard, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Save, Loader2, CheckCircle2, AlertTriangle, Settings2, Users, Key, Calendar, CreditCard, RefreshCw, Palette } from 'lucide-react';
 import { RoleConfig, Subscription, SystemSettings } from '../types';
 import { db } from '../services/database';
 
@@ -143,7 +143,7 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
         await db.update('system_settings', systemSettings);
       }
       await Promise.all(roles.map(role => db.update('role_configs', role)));
-      addToast("Configurações atualizadas com sucesso!", "success");
+      addToast("Configurações updated com sucesso!", "success");
     } catch (error) {
       addToast("Erro ao salvar configurações.", "error");
     } finally {
@@ -221,6 +221,7 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
             </div>
           </div>
         </div>
+
 
         <div className="bg-white dark:bg-zinc-900 rounded-[3rem] border-2 border-slate-100 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors mb-8">
           <div className="p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
@@ -358,6 +359,7 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
             </table>
           </div>
         </div>
+
 
         <div className="mt-10 p-8 bg-blue-50 dark:bg-blue-900/20 border-2 border-dashed border-blue-200 dark:border-blue-800 rounded-[2.5rem] flex items-start gap-4">
           <div className="p-3 bg-blue-100 dark:bg-blue-900/40 rounded-2xl text-blue-600 dark:text-blue-400">

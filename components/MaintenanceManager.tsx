@@ -20,6 +20,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ vehicles = [], 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [costInput, setCostInput] = useState('0.00');
   const [formData, setFormData] = useState<Partial<MaintenanceRecord>>({
     date: new Date().toISOString().split('T')[0],
     cost: 0,
@@ -28,6 +29,39 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ vehicles = [], 
     description: '',
     service_type: 'CORRETIVA'
   });
+
+  const handleCostChange = (val: string) => {
+    // Permite apenas dígitos e no máximo um ponto ou vírgula
+    let cleanValue = val.replace(/[^0-9.,]/g, '');
+    
+    // Substitui vírgula por ponto para consistência e valida quantidade de separadores
+    const parts = cleanValue.split(/[.,]/);
+    if (parts.length > 2) {
+      cleanValue = parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    setCostInput(cleanValue);
+    
+    // Converte e atualiza o estado original com o valor numérico para persistência
+    const normalized = cleanValue.replace(',', '.');
+    const numericVal = parseFloat(normalized);
+    setFormData(prev => ({
+      ...prev,
+      cost: isNaN(numericVal) ? 0 : numericVal
+    }));
+  };
+
+  const handleCostBlur = () => {
+    const normalized = costInput.replace(',', '.');
+    const numericVal = parseFloat(normalized);
+    if (isNaN(numericVal) || numericVal <= 0) {
+      setCostInput('0.00');
+      setFormData(prev => ({ ...prev, cost: 0 }));
+    } else {
+      setCostInput(numericVal.toFixed(2));
+      setFormData(prev => ({ ...prev, cost: numericVal }));
+    }
+  };
 
   const loadLogs = async () => {
     setIsLoading(true);
@@ -162,6 +196,7 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ vehicles = [], 
         description: '',
         service_type: 'CORRETIVA'
     });
+    setCostInput('0.00');
     setIsModalOpen(true);
   };
 
@@ -486,7 +521,14 @@ const MaintenanceManager: React.FC<MaintenanceManagerProps> = ({ vehicles = [], 
                 </div>
                 <div>
                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Custo Total (R$)</label>
-                    <input type="number" step="0.01" className="w-full px-5 py-4 border-2 border-slate-50 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.cost ?? ''} onChange={e => setFormData({...formData, cost: parseFloat(e.target.value)})} />
+                    <input 
+                      type="text" 
+                      className="w-full px-5 py-4 border-2 border-slate-50 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" 
+                      value={costInput} 
+                      onChange={e => handleCostChange(e.target.value)} 
+                      onBlur={handleCostBlur}
+                      placeholder="0.00"
+                    />
                 </div>
                 <div className="flex gap-4 pt-4">
                     <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>

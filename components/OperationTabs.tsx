@@ -78,19 +78,26 @@ const OperationTabs: React.FC<OperationTabsProps> = (props) => {
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Módulo de Gestão Operacional em Tempo Real</p>
         </div>
         
-        <div className="flex bg-white dark:bg-zinc-900 p-2 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm self-start">
+        <div className="flex bg-white dark:bg-zinc-900 p-2 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm self-start relative">
           {availableTabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${
+              className={`relative flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest transition-all ${
                 activeTab === tab.id 
-                  ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/20' 
+                  ? 'text-white z-10' 
                   : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
               }`}
             >
-              <tab.icon size={14} />
-              {tab.label}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="activeTabBg"
+                  className="absolute inset-0 bg-slate-900 dark:bg-yellow-400 rounded-2xl shadow-lg -z-10"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <tab.icon size={14} className={activeTab === tab.id ? "text-yellow-400 dark:text-slate-900" : ""} />
+              <span className={activeTab === tab.id ? "dark:text-slate-900" : ""}>{tab.label}</span>
             </button>
           ))}
         </div>

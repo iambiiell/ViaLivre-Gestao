@@ -238,15 +238,44 @@ const ViewContent: React.FC<{
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
                 <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700">
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Versão do Sistema</p>
-                  <p className="text-lg font-black text-slate-900 dark:text-zinc-100">v3.5.2 Pro</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-zinc-100">v2.0</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700">
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Desenvolvedor</p>
-                  <p className="text-lg font-black text-slate-900 dark:text-zinc-100">ViaLivre Gestão</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-zinc-100">Viação Nicolau S/A</p>
                 </div>
                 <div className="bg-slate-50 dark:bg-zinc-800 p-6 rounded-3xl border border-slate-100 dark:border-zinc-700 md:col-span-2">
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Suporte Técnico</p>
-                  <a href={`mailto:${systemSettings?.support_email || 'suporte@vialivre.com.br'}`} className="text-lg font-black text-slate-900 dark:text-zinc-100 hover:text-yellow-600 transition-colors uppercase">{systemSettings?.support_email || 'suporte@vialivre.com.br'}</a>
+                  <div className="flex flex-col gap-1.5 border-b border-slate-100 dark:border-zinc-700/50 pb-4 mb-4">
+                    <a href={`mailto:${systemSettings?.support_email || 'via.nicolau.sa@gmail.com'}`} className="text-lg font-black text-slate-900 dark:text-zinc-100 hover:text-yellow-600 transition-colors uppercase">
+                      {systemSettings?.support_email || 'via.nicolau.sa@gmail.com'}
+                    </a>
+                    <a href="https://wa.me/5524978358199?text=Ol%C3%A1%2C%20preciso%20de%20suporte%20no%20sistema%20Via%C3%A7%C3%A3o%20Nicolau%20S%2FA" target="_blank" rel="noopener noreferrer" className="text-sm font-black text-yellow-600 hover:underline">
+                      (24) 9 7835-8199
+                    </a>
+                  </div>
+                  
+                  <p className="text-[9px] font-black text-slate-400 uppercase mb-3 flex items-center gap-2">
+                    <RefreshCw size={12} className="text-yellow-400" /> Orientações e Suporte
+                  </p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <p className="font-black text-xs text-slate-900 dark:text-zinc-100 uppercase italic">Recomeçar Tutorial de Boas-vindas</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1.5 leading-relaxed">
+                        Reativa o passo a passo interativo de primeiro acesso das ferramentas administrativas.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => {
+                        localStorage.removeItem('fluxo_tutorial_seen');
+                        addToast("Tutorial redefinido com sucesso! O passo a passo será exibido no próximo login ou recarregamento.", "success");
+                      }}
+                      className="px-6 py-3.5 bg-slate-900 dark:bg-zinc-700 hover:bg-slate-850 dark:hover:bg-zinc-600 text-white rounded-2xl font-black uppercase text-[9px] tracking-widest transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 shrink-0 border border-slate-800 dark:border-zinc-600"
+                    >
+                      <RefreshCw size={12} />
+                      Recomeçar Tutorial
+                    </button>
+                  </div>
                 </div>
               </div>
           </div>
@@ -318,6 +347,137 @@ const ViewContent: React.FC<{
       </div>
     </div>
   );
+};
+
+const ROLE_TUTORIALS: Record<string, {
+  title: string;
+  subtitle: string;
+  step1Title: string;
+  step1Desc: string;
+  step2Title: string;
+  step2Desc: string;
+  quote: string;
+  features: { l: string; d: string }[];
+}> = {
+  ADMIN: {
+    title: "Bem-vindo ao ViaLivre Gestão!",
+    subtitle: "Tutorial de Primeiro Acesso para Administradores de Frota",
+    step1Title: "Configuração Básica do Painel",
+    step1Desc: "Para permitir o correto funcionamento operacional, as abas Colaboradores, Empresas, Itinerários e Municípios devem ser povoadas primeiro. Elas criam o alicerce de rotas e equipes.",
+    step2Title: "Operação e Supervisão Integrada",
+    step2Desc: "Utilize a Escala de Viagens para designar veículos, motoristas e horários. Visualize em tempo real o andamento e registre incidentes com os despachantes.",
+    quote: '"O sucesso da sua operação começa com dados bem cadastrados e processos organizados. Vamos começar?"',
+    features: [
+      { l: "Dashboard Geral", d: "Visão analítica de passageiros e faturamento diário" },
+      { l: "Gestão Global", d: "Controle de cargos, permissões e redefinição de tutorial" },
+      { l: "Itinerários & Frota", d: "Pontos de parada, linhas, veículos e vistorias" },
+      { l: "Fechamento Financeiro", d: "Folha de pagamento e monitoramento de rubricas" },
+      { l: "Controle de Despacho", d: "Atribuição e liberação em garagem" },
+      { l: "SAC & Ouvidoria", d: "Atendimento ao cliente e suporte especializado" }
+    ]
+  },
+  DRIVER: {
+    title: "Portal de Bordo do Motorista!",
+    subtitle: "Guia de Inicialização e Registro de Jornada",
+    step1Title: "Ponto Eletrônico e Jornada",
+    step1Desc: "Antes de ver ou iniciar qualquer viagem, você deve registrar o seu Ponto de Entrada (Clock-In) na aba correspondente do sistema. Isso libera as suas escalas.",
+    step2Title: "Programação e Escalas",
+    step2Desc: "Acesse as escalas de viagem designadas para você hoje. Acompanhe a viatura designada, paradas obrigatórias, itinerário detalhado e relate quaisquer ocorrências no percurso.",
+    quote: '"Direção defensiva de alta qualidade e pontualidade garantem um transporte público exemplar. Boa viagem!"',
+    features: [
+      { l: "Ponto Digital", d: "Registro rápido e seguro da entrada e saída de turno" },
+      { l: "Minhas Escalas", d: "Quadro de horários e ônibus escalados para o seu CPF" },
+      { l: "Relato de Alertas", d: "Envio rápido de avisos sobre problemas na via" },
+      { l: "Quadro de Avisos", d: "Notícias e mudanças operacionais emitidas pela central" },
+      { l: "Diário de Bordo", d: "Envio de ocorrências ou falhas veiculares do motorista" },
+      { l: "SAC & Rotas", d: "Consulta de rotas e contato direto com a empresa" }
+    ]
+  },
+  CONDUCTOR: {
+    title: "Jornada de Trabalho do Cobrador!",
+    subtitle: "Guia Operacional e Fiscalização de Tarifas",
+    step1Title: "Registro de Expediente",
+    step1Desc: "Sempre inicie o seu turno batendo a Entrada no Ponto Eletrônico. Dessa forma, suas escalas de faturamento e ônibus vinculados ficam liberados.",
+    step2Title: "Controle de Tarifa e Vendas",
+    step2Desc: "Monitore o embarque de passageiros, faça a conferência de passes escolares, gratuidades ou carregamento dos cartões de transporte integrados no veículo.",
+    quote: '"Sua atenção no fluxo de passageiros e no controle de faturamento é fundamental para a saúde operacional do trajeto."',
+    features: [
+      { l: "Ponto Eletrônico", d: "Abertura e fechamento oficial de expediente" },
+      { l: "Escalas do Cobrador", d: "Viagens marcadas em que você fará a assistência de embarque" },
+      { l: "Quadro de Avisos", d: "Instruções diretas do despachante ou da diretoria" },
+      { l: "Ocorrências de Viagem", d: "Comunique rapidamente qualquer conflito ou sinistro" },
+      { l: "Histórico de Ponto", d: "Audite suas próprias horas trabalhadas com clareza" },
+      { l: "Contato de Suporte", d: "Suporte imediato de garagem e RH no menu de ajuda" }
+    ]
+  },
+  FISCAL: {
+    title: "Painel de Fiscalização Ativa!",
+    subtitle: "Controle de Linhas, Cumprimento de Horários e Segurança",
+    step1Title: "Abertura de Serviços",
+    step1Desc: "Informe o início do seu dia registrando o Ponto. O aplicativo habilitará as ferramentas de fiscalização de garagem, partidas e inspeção de viaturas.",
+    step2Title: "Cumprimento de Horários e Vistoria",
+    step2Desc: "Registre o estado físico dos ônibus antes de partirem. Verifique se o itinerário está correto, se os horários de partida batem e emita advertências ou multas.",
+    quote: '"A regularidade do serviço e o cumprimento rígido de horários dependem da precisão do seu olhar clínico. Bom trabalho!"',
+    features: [
+      { l: "Acompanhamento Ativo", d: "Tabelas de partidas e verificação de frotas em trânsito" },
+      { l: "Inspeções de Veículo", d: "Checklists completos de segurança e conservação do ônibus" },
+      { l: "Eventos Operacionais", d: "Anotação rápida de avarias, sinistros ou atrasos na linha" },
+      { l: "Histórico de Multas", d: "Monitoramento de multas emitidas para motoristas" },
+      { l: "Avisos Gerais", d: "Criação de notícias corporativas urgentes para colaboradores" },
+      { l: "Rotas & Itinerários", d: "Conferência rápida e visual de quilometragem e tempos" }
+    ]
+  },
+  AGENTE: {
+    title: "Terminal de Bilheteria ConsImp!",
+    subtitle: "Emissão de Passagens e Gestão de Tarifas Comerciais",
+    step1Title: "Venda Rápida e Poltronas",
+    step1Desc: "Selecione a viagem desejada, clique nos assentos disponíveis de forma interativa e informe a classe (Ex: Convencional, Luxo). Insira os dados do passageiro para emitir.",
+    step2Title: "Controle de Cartão e Recarga",
+    step2Desc: "Agilize a carga de créditos para passageiros físicos. Informe o número do cartão, adicione o valor desejado (PIX, Crédito, Débito ou Dinheiro) e valide o bilhete térmico.",
+    quote: '"Um atendimento cordial e processos de emissão rápidos reduzem filas e encantam o usuário final. Boas vendas!"',
+    features: [
+      { l: "Bilhetagem Rápida", d: "Emissão de passagens e geração de QR code impresso" },
+      { l: "Configuração de Poltronas", d: "Defina a quantidade de assentos de acordo com a classe do ônibus" },
+      { l: "SAC & Chamados", d: "Ajude na tratativa de reclamações e resoluções no balcão" },
+      { l: "Controle de Vouchers", d: "Gestão de passagens emitidas e reimpressão de comprovantes" },
+      { l: "Status das Partidas", d: "Acompanhe vagas disponíveis por ônibus em viagem futura" },
+      { l: "Quadro de Avisos", d: "Alertas corporativos urgentes para guichês em rodoviárias" }
+    ]
+  },
+  DESPACHANTE: {
+    title: "Central de Despacho Operacional!",
+    subtitle: "Controle Dinâmico de Tráfego, Escala e Veículos em Garagem",
+    step1Title: "Liberação de Veículos",
+    step1Desc: "Acompanhe as viagens prontas para partida. Associe ônibus mecânicos saudáveis sob escalas corretas e valide a presença da tripulação antes de cada partida.",
+    step2Title: "Monitoramento de Eventos",
+    step2Desc: "Identifique carros retidos por falha, quebras no trajeto, multas e envie comunicados imediatos para que motoristas fiquem cientes em tempo real no app.",
+    quote: '"Você é o coração da operação logística. Manter a garagem ativa e os horários em dia é o nosso combustível!"',
+    features: [
+      { l: "Quadro de Despacho", d: "Tabela viva de partidas, permissões de viagem e liberação" },
+      { l: "Manutenção da Frota", d: "Controle preventivo e corretivo e status dos carros" },
+      { l: "Painel de Incidentes", d: "Histórico e registro de problemas no percurso" },
+      { l: "Gestão de Escalas", d: "Distribuição equitativa de Motoristas e Cobradores" },
+      { l: "Avisos de Emergência", d: "Disparos instantâneos de notícias para a equipe de rua" },
+      { l: "Itinerários Operacionais", d: "Mapa de frotagem e rotas cadastradas por linha" }
+    ]
+  },
+  RH: {
+    title: "Gestão Estratégica de Pessoas & RH!",
+    subtitle: "Administração de Contratações, Holerites e Auditoria de Ponto",
+    step1Title: "Gestão Profissional",
+    step1Desc: "Acompanhe fichas completas de contratação, cargos, datas de admissão, validades de CNH para motoristas e redefina acessos setoriais do sistema.",
+    step2Title: "Folha de Pagamento Inteligente",
+    step2Desc: "Apure mensalmente ou semanalmente as horas extras, faltas e aplique rubricas salariais devidas (deduções ou benefícios) para emissão de holerites fiscais.",
+    quote: '"Cuidar do bem-estar dos colaboradores e manter a conformidade trabalhista gera uma equipe de alta dedicação."',
+    features: [
+      { l: "Talentos & Recrutamento", d: "Acompanhamento de vagas em aberto e currículos recebidos" },
+      { l: "Folha de Pagamento", d: "Lançamento de rubricas personalizadas e geração de holerites" },
+      { l: "Auditoria de Ponto", d: "Controle detalhado de horas, entradas, saídas e justificativas" },
+      { l: "Cargos e Funções", d: "Configuração de privilégios para cada colaborador" },
+      { l: "Comunicação Interna", d: "Publicação de avisos administrativos de RH para a equipe" },
+      { l: "Skins e Identidade", d: "Acompanhe e configure a imagem visual da frota corporativa" }
+    ]
+  }
 };
 
 const App: React.FC = () => {
@@ -420,6 +580,24 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSidebarOpen]);
+
+  // Effect to apply dynamic theme color palettes globally
+  useEffect(() => {
+    const root = document.documentElement;
+    const themeColor = systemSettings?.theme_color || 'yellow';
+    
+    const colors: Record<string, { primary: string; dark: string }> = {
+      yellow: { primary: '#facc15', dark: '#eab308' }, // Amarelo (Padrão)
+      blue: { primary: '#3b82f6', dark: '#2563eb' }, // Azul
+      indigo: { primary: '#6366f1', dark: '#4f46e5' }, // Índigo
+      emerald: { primary: '#10b981', dark: '#059669' }, // Esmeralda
+      rose: { primary: '#ec4899', dark: '#db2777' }, // Rosa Elegante
+    };
+    
+    const selected = colors[themeColor] || colors.yellow;
+    root.style.setProperty('--primary-color', selected.primary);
+    root.style.setProperty('--primary-color-dark', selected.dark);
+  }, [systemSettings]);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -656,6 +834,13 @@ const App: React.FC = () => {
         db.setSystemId(u.system_id || null);
         setCurrentUser(u);
         setCurrentView('dashboard');
+        
+        // Auto trigger tutorial for all collaborators if not seen
+        if (u.role && u.role !== 'PASSENGER' && !localStorage.getItem('fluxo_tutorial_seen')) {
+          setTimeout(() => {
+            setShowTutorial(true);
+          }, 1500);
+        }
       } 
       catch (e) { localStorage.removeItem('fluxo_session_user'); setIsLoading(false); }
     } else {
@@ -719,7 +904,7 @@ const App: React.FC = () => {
           setShowWelcome(true);
           setTimeout(() => {
             setShowWelcome(false);
-            if (user.role === 'ADMIN' && !localStorage.getItem('fluxo_tutorial_seen')) {
+            if (user.role && user.role !== 'PASSENGER' && !localStorage.getItem('fluxo_tutorial_seen')) {
               setShowTutorial(true);
             }
           }, 4500);
@@ -807,6 +992,7 @@ const App: React.FC = () => {
         }
         if (res) {
           addToast("Operação concluída com sucesso.", "success");
+          loadInitialData();
           return true;
         }
         return null;
@@ -1054,6 +1240,7 @@ const App: React.FC = () => {
     subscription, 
     skins, 
     systemSettings, 
+    ticketBooths, 
     onUpdateSettings: (s: any) => handleAction('update', 'system_settings', s),
     userFines,
     roleConfigs,
@@ -1082,6 +1269,8 @@ const App: React.FC = () => {
           currentUser={currentUser} 
           themeMode={themeMode} 
           onToggleTheme={()=>setThemeMode(themeMode === 'light' ? 'dark' : 'light')} 
+          onChangeThemeMode={(mode) => setThemeMode(mode)}
+          onUpdateSettings={(s) => handleAction('update', 'system_settings', s)}
           unreadNotificationsCount={notifications.filter(n => {
             if (n.is_read) return false;
             if (currentUser?.role === 'ADMIN') return true;
@@ -1092,11 +1281,11 @@ const App: React.FC = () => {
           systemSettings={systemSettings} 
         />
         
-        <main key={currentView} className={`w-full ${isMobile ? 'pt-20 px-4' : 'pt-24 px-8'} h-full transition-all pb-44 md:pb-24`}>
+        <main key={currentView} className={`w-full ${isMobile ? 'pt-16 px-4' : 'pt-18 px-8'} h-full transition-all pb-44 md:pb-24`}>
           <ViewContent currentView={currentView as ViewState} commonProps={commonProps} handleAction={handleAction} />
         </main>
 
-        <div className="fixed top-20 right-4 z-[300] flex flex-col gap-3 max-w-[90vw] pointer-events-none">
+        <div className="fixed top-16 right-4 z-[300] flex flex-col gap-3 max-w-[90vw] pointer-events-none">
           <AnimatePresence>
             {(toasts || []).map(toast => (
               <motion.div 
@@ -1224,78 +1413,75 @@ const App: React.FC = () => {
 
         {isMobile && currentView !== 'driver-view' && <MobileBottomNav currentView={currentView} onChangeView={(v) => setCurrentView(v)} onOpenMenu={() => setIsSidebarOpen(true)} currentUser={currentUser} />}
 
-        {showTutorial && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[2000] flex items-center justify-center p-4 overflow-y-auto">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              className="bg-white dark:bg-zinc-950 w-full max-w-4xl rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden flex flex-col my-8"
-            >
-              <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
-                <div>
-                  <h2 className="text-2xl font-black uppercase italic tracking-tighter">Bem-vindo ao ViaLivre Gestão!</h2>
-                  <p className="text-[10px] font-black text-yellow-400 uppercase mt-1">Tutorial de Primeiro Acesso para Administradores</p>
+        {showTutorial && (() => {
+          const userRole = currentUser?.role || 'ADMIN';
+          const tut = ROLE_TUTORIALS[userRole === 'TICKET_AGENT' ? 'AGENTE' : userRole] || ROLE_TUTORIALS.ADMIN;
+          return (
+            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[2000] flex items-center justify-center p-4 overflow-y-auto">
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                className="bg-white dark:bg-zinc-950 w-full max-w-4xl rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden flex flex-col my-8"
+              >
+                <div className="p-8 bg-slate-900 text-white flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter">{tut.title}</h2>
+                    <p className="text-[10px] font-black text-yellow-400 uppercase mt-1">{tut.subtitle}</p>
+                  </div>
+                  <button onClick={() => { setShowTutorial(false); localStorage.setItem('fluxo_tutorial_seen', 'true'); }} className="p-3 bg-white/10 rounded-2xl hover:bg-red-500 transition-colors"><X size={24}/></button>
                 </div>
-                <button onClick={() => { setShowTutorial(false); localStorage.setItem('fluxo_tutorial_seen', 'true'); }} className="p-3 bg-white/10 rounded-2xl hover:bg-red-500 transition-colors"><X size={24}/></button>
-              </div>
-              <div className="p-8 space-y-8 overflow-y-auto max-h-[60vh] custom-scrollbar">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase text-slate-800 dark:text-zinc-100 flex items-center gap-2">
-                      <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center text-slate-900">1</div>
-                      Configuração Inicial
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed font-bold">
-                      Para o sistema funcionar corretamente, as abas <span className="text-yellow-600">Colaboradores, Empresas, Itinerários e Municípios</span> devem ser as primeiras a serem preenchidas. Elas formam a base de dados para todo o resto.
+                <div className="p-8 space-y-8 overflow-y-auto max-h-[60vh] custom-scrollbar">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-black uppercase text-slate-800 dark:text-zinc-100 flex items-center gap-2">
+                        <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center text-slate-900 font-black">1</div>
+                        {tut.step1Title}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed font-bold">
+                        {tut.step1Desc}
+                      </p>
+                    </div>
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-black uppercase text-slate-800 dark:text-zinc-100 flex items-center gap-2">
+                        <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center text-slate-900 font-black">2</div>
+                        {tut.step2Title}
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed font-bold">
+                        {tut.step2Desc}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800">
+                    <h4 className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Resumo das Funcionalidades da sua Conta:</h4>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {tut.features.map(item => (
+                        <div key={item.l} className="p-3 bg-white dark:bg-zinc-800 rounded-xl border dark:border-zinc-700">
+                          <p className="text-[9px] font-black text-slate-800 dark:text-zinc-100 uppercase mb-1">{item.l}</p>
+                          <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight">{item.d}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-yellow-50 dark:bg-yellow-900/10 rounded-3xl border-2 border-dashed border-yellow-400">
+                    <p className="text-xs font-black text-slate-800 dark:text-zinc-100 uppercase text-center italic">
+                      {tut.quote}
                     </p>
                   </div>
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase text-slate-800 dark:text-zinc-100 flex items-center gap-2">
-                      <div className="w-8 h-8 bg-yellow-400 rounded-lg flex items-center justify-center text-slate-900">2</div>
-                      Gestão Operacional
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed font-bold">
-                      Use a <span className="text-blue-600">Escala de Viagens</span> para planejar o dia e gerenciar as operações da frota.
-                    </p>
-                  </div>
                 </div>
-
-                <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Resumo das Funcionalidades:</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    {[
-                      { l: 'Dashboard', d: 'Visão geral do sistema' },
-                      { l: 'Gestão Global', d: 'Cargos, Rubricas e Configurações' },
-                      { l: 'Itinerários', d: 'Cadastro de linhas e horários' },
-                      { l: 'Frota', d: 'Controle de ônibus e manutenção' },
-                      { l: 'Financeiro', d: 'Holerites e Rubricas' },
-                      { l: 'Despachante', d: 'Liberação de veículos e ocorrências' }
-                    ].map(item => (
-                      <div key={item.l} className="p-3 bg-white dark:bg-zinc-800 rounded-xl border dark:border-zinc-700">
-                        <p className="text-[9px] font-black text-slate-800 dark:text-zinc-100 uppercase mb-1">{item.l}</p>
-                        <p className="text-[8px] text-slate-400 font-bold uppercase leading-tight">{item.d}</p>
-                      </div>
-                    ))}
-                  </div>
+                <div className="p-8 bg-slate-50 dark:bg-zinc-900 border-t dark:border-zinc-800 flex justify-center">
+                  <button 
+                    onClick={() => { setShowTutorial(false); localStorage.setItem('fluxo_tutorial_seen', 'true'); }}
+                    className="px-12 py-4 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-xs shadow-xl border-2 border-slate-900 active:scale-95 transition-all"
+                  >
+                    Entendido, vamos lá!
+                  </button>
                 </div>
-
-                <div className="p-6 bg-yellow-50 dark:bg-yellow-900/10 rounded-3xl border-2 border-dashed border-yellow-400">
-                  <p className="text-xs font-black text-slate-800 dark:text-zinc-100 uppercase text-center italic">
-                    "O sucesso da sua operação começa com dados bem cadastrados. Vamos começar?"
-                  </p>
-                </div>
-              </div>
-              <div className="p-8 bg-slate-50 dark:bg-zinc-900 border-t dark:border-zinc-800 flex justify-center">
-                <button 
-                  onClick={() => { setShowTutorial(false); localStorage.setItem('fluxo_tutorial_seen', 'true'); }}
-                  className="px-12 py-4 bg-yellow-400 text-slate-900 rounded-2xl font-black uppercase text-xs shadow-xl border-2 border-slate-900 active:scale-95 transition-all"
-                >
-                  Entendido, vamos lá!
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
+              </motion.div>
+            </div>
+          );
+        })()}
       </div>
     </ErrorBoundary>
   );

@@ -30,7 +30,7 @@ const SubscriptionExpired: React.FC<SubscriptionExpiredProps> = ({ onLogout }) =
           
           <div className="space-y-4">
             <button
-              onClick={() => window.open('https://wa.me/5521999999999', '_blank')}
+              onClick={() => window.open('https://wa.me/5524978358199?text=Olá,%20preciso%20de%20suporte%20no%20sistema%20Viação%20Nicolau%20S/A', '_blank')}
               className="w-full flex items-center justify-center gap-2 bg-slate-900 text-white py-3 rounded-xl font-medium hover:bg-slate-800 transition-colors"
             >
               <PhoneCall className="w-5 h-5" />

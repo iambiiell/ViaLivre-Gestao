@@ -319,8 +319,8 @@ const TicketingConfigManager: React.FC<TicketingConfigManagerProps> = ({ initial
                   
                   <div className="mb-8 p-6 bg-slate-50 dark:bg-zinc-800 rounded-3xl border-2 border-dashed border-yellow-400/30">
                       <p className="text-[9px] font-black text-slate-400 uppercase mb-4 flex items-center gap-2"><Plus size={12}/> Adicionar Nova Configuração</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div className="sm:col-span-2">
                               <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">Nome da Classe (Ex: LUXO)</label>
                               <input 
                                 className="w-full px-5 py-3 bg-white dark:bg-zinc-900 border-2 border-yellow-400/20 rounded-xl font-bold uppercase text-[10px] dark:text-white outline-none focus:border-yellow-400 transition-all" 
@@ -331,33 +331,33 @@ const TicketingConfigManager: React.FC<TicketingConfigManagerProps> = ({ initial
                           </div>
                           <div>
                               <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">Qtd. de Poltronas</label>
-                              <div className="flex gap-2">
-                                  <input 
-                                    type="number"
-                                    className="w-24 px-5 py-3 bg-white dark:bg-zinc-900 border-2 border-yellow-400/20 rounded-xl font-bold text-[10px] dark:text-white outline-none focus:border-yellow-400 transition-all" 
-                                    value={newCustomClassSeats === 0 ? '' : newCustomClassSeats} 
-                                    placeholder="44"
-                                    onChange={e => {
-                                      const val = e.target.value;
-                                      setNewCustomClassSeats(Number(val) || 0);
-                                    }} 
-                                  />
-                                  <button 
-                                    onClick={handleAddOrUpdateCustomClass}
-                                    className={`px-6 rounded-xl font-black uppercase text-[10px] active:scale-95 transition-all ${editingCustomClassId ? 'bg-indigo-600 text-white' : 'bg-yellow-400 text-slate-900'}`}
-                                  >
-                                      {editingCustomClassId ? 'Atualizar' : 'Adicionar'}
-                                  </button>
-                              </div>
+                              <input 
+                                type="number"
+                                className="w-full px-5 py-3 bg-white dark:bg-zinc-900 border-2 border-yellow-400/20 rounded-xl font-bold text-[10px] dark:text-white outline-none focus:border-yellow-400 transition-all" 
+                                value={newCustomClassSeats === 0 ? '' : newCustomClassSeats} 
+                                placeholder="44"
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setNewCustomClassSeats(Number(val) || 0);
+                                }} 
+                              />
                           </div>
                       </div>
-                      {editingCustomClassId && (
-                        <button onClick={() => {
-                          setEditingCustomClassId(null);
-                          setNewCustomClassName('');
-                          setNewCustomClassSeats(0);
-                        }} className="mt-2 text-[8px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors">Cancelar Edição</button>
-                      )}
+                      <div className="mt-4 flex flex-wrap gap-3 items-center">
+                          <button 
+                            onClick={handleAddOrUpdateCustomClass}
+                            className={`px-10 py-3 rounded-xl font-black uppercase text-xs active:scale-95 transition-all shadow-md hover:scale-102 ${editingCustomClassId ? 'bg-indigo-600 text-white' : 'bg-yellow-400 text-slate-900 border-2 border-yellow-500/20'}`}
+                          >
+                              {editingCustomClassId ? 'Atualizar' : 'Adicionar'}
+                          </button>
+                          {editingCustomClassId && (
+                            <button onClick={() => {
+                              setEditingCustomClassId(null);
+                              setNewCustomClassName('');
+                              setNewCustomClassSeats(0);
+                            }} className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:text-red-500 transition-colors">Cancelar Edição</button>
+                          )}
+                      </div>
                   </div>
 
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

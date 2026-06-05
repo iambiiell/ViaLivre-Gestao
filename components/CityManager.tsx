@@ -115,7 +115,7 @@ const CityManager: React.FC<CityManagerProps> = ({ cities = [], onAddCity, onUpd
                     <p className="text-[9px] text-slate-400 font-black uppercase tracking-[0.2em] mt-1">Cód. Operacional: {city.code}</p>
                 </div>
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity items-center">
+              <div className="flex gap-1 items-center">
                   <button onClick={() => handleOpenModal(city)} className="p-3 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/10 rounded-xl transition-all"><Pencil size={18}/></button>
                   
                   {deletingId === city.id ? (

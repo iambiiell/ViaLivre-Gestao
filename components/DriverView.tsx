@@ -57,7 +57,18 @@ const DriverView: React.FC<DriverViewProps> = ({
   ticketingConfig
 }) => {
   const [filterDate, setFilterDate] = useState(new Date().toISOString().split('T')[0]);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
   const [checkinModal, setCheckinModal] = useState<{ trip: Trip; mode: 'start' | 'end' } | null>(null);
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      const isCompleted = localStorage.getItem(`vialivre_driver_tutorial_completed_${currentUser.id}`);
+      if (!isCompleted) {
+        setShowTutorial(true);
+      }
+    }
+  }, [currentUser]);
   const [boardingMapTrip, setBoardingMapTrip] = useState<Trip | null>(null);
   const [tickets, setTickets] = useState<TicketSale[]>([]);
   const [formData, setFormData] = useState<any>({
@@ -386,6 +397,36 @@ const DriverView: React.FC<DriverViewProps> = ({
   };
 
   const isUrbanCurrentView = routes.find(r => r.id === activeTrip?.route_id)?.route_type === 'URBANO';
+
+  const tutorialSteps = [
+    {
+      title: "Bem-Vindo ao Tutorial de Bordo!",
+      description: "Olá, Motorista! Este é o seu espaço de trabalho digital. A partir de agora, daremos um tour rápido sobre como utilizar as ferramentas de viagem e comandar suas programações com facilidade.",
+      icon: <Layout className="text-yellow-500" size={44} />,
+    },
+    {
+      title: "Como Iniciar uma Viagem",
+      description: "Localize a sua viagem programada na lista do dia. Clique no botão verde 'Iniciar Viagem'. Para itinerários Urbanos, certifique-se de preencher a roleta inicial na janela que se abrir, para poder despachar de forma correta.",
+      icon: <Play className="text-emerald-500 animate-pulse" size={44} />,
+    },
+    {
+      title: "Durante a Viagem",
+      description: "Uma vez iniciada, a viagem estará com o status 'Em Rota'. Todas as estatísticas e vendas em tempo real serão sincronizadas para te dar suporte no caminho.",
+      icon: <Navigation className="text-blue-500" size={44} />,
+    },
+    {
+      title: "Como Finalizar sua Viagem",
+      description: "Ao chegar ao destino final, clique no botão azul 'Finalizar Viagem'. Em trajetos urbanos, será aberta uma janela para preencher a roleta final e o faturamento do dia (dinheiro, pix, etc.). É super prático!",
+      icon: <CheckCircle2 className="text-indigo-500" size={44} />,
+    }
+  ];
+
+  const handleFinishTutorial = () => {
+    if (currentUser?.id) {
+      localStorage.setItem(`vialivre_driver_tutorial_completed_${currentUser.id}`, 'true');
+    }
+    setShowTutorial(false);
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-24">
@@ -979,6 +1020,96 @@ const DriverView: React.FC<DriverViewProps> = ({
       )}
 
       {/* Modal de Mapa de Embarque (Rodoviário) foi substituído pelo TripSelectionModal acima */}
+
+      {/* Onboarding Tutorial Mode */}
+      <AnimatePresence>
+        {showTutorial && (
+          <div className="fixed inset-0 bg-slate-950/85 dark:bg-black/90 z-[300] flex items-center justify-center p-4 backdrop-blur-md">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white dark:bg-zinc-950 w-full max-w-md rounded-[2.5rem] p-8 md:p-10 border-4 border-yellow-400 shadow-2xl flex flex-col items-center text-center relative max-h-[90vh] overflow-y-auto"
+            >
+              {/* Close Button / Absolute X */}
+              <button 
+                onClick={handleFinishTutorial} 
+                className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-100 rounded-full transition-all"
+                title="Pular Tutorial"
+              >
+                <X size={20} />
+              </button>
+
+              {/* Step counter */}
+              <div className="text-[9px] font-black tracking-widest text-yellow-600 dark:text-yellow-500 uppercase mb-6">
+                Passo {tutorialStep + 1} de {tutorialSteps.length} • Tutorial de Bordo
+              </div>
+
+              {/* Animated Step Content */}
+              <div className="flex flex-col items-center gap-6 flex-1 min-h-[220px]">
+                <div className="w-20 h-20 rounded-[2rem] bg-slate-50 dark:bg-zinc-900 flex items-center justify-center shadow-inner border border-slate-100 dark:border-zinc-850">
+                  {tutorialSteps[tutorialStep].icon}
+                </div>
+                
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 dark:text-zinc-100 uppercase italic tracking-tight mb-2">
+                    {tutorialSteps[tutorialStep].title}
+                  </h3>
+                  <p className="text-xs font-bold text-slate-500 dark:text-zinc-400 leading-relaxed max-w-sm">
+                    {tutorialSteps[tutorialStep].description}
+                  </p>
+                </div>
+              </div>
+
+              {/* Dots Progress Indicator */}
+              <div className="flex gap-2.5 my-6 self-center">
+                {tutorialSteps.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setTutorialStep(idx)}
+                    className={`h-1.5 rounded-full transition-all ${tutorialStep === idx ? 'w-6 bg-yellow-400' : 'w-1.5 bg-slate-200 dark:bg-zinc-800'}`}
+                  />
+                ))}
+              </div>
+
+              {/* Navigation Actions */}
+              <div className="flex w-full gap-3 mt-auto">
+                {tutorialStep > 0 ? (
+                  <button
+                    onClick={() => setTutorialStep(prev => prev - 1)}
+                    className="flex-1 py-3 bg-slate-100 dark:bg-zinc-900 hover:bg-slate-200 text-slate-600 dark:text-zinc-300 rounded-xl font-black uppercase text-[9px] tracking-widest transition-all"
+                  >
+                    Voltar
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleFinishTutorial}
+                    className="flex-1 py-3 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-300 font-black uppercase text-[9px] tracking-widest transition-all"
+                  >
+                    Pular
+                  </button>
+                )}
+
+                {tutorialStep < tutorialSteps.length - 1 ? (
+                  <button
+                    onClick={() => setTutorialStep(prev => prev + 1)}
+                    className="flex-[2] py-3 bg-yellow-400 hover:bg-yellow-500 text-slate-900 rounded-xl font-black uppercase text-[9px] tracking-widest shadow-lg shadow-yellow-500/10 transition-all active:scale-95 border-2 border-slate-950"
+                  >
+                    Avançar
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleFinishTutorial}
+                    className="flex-[2] py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black uppercase text-[9px] tracking-widest shadow-lg shadow-emerald-500/10 transition-all active:scale-95 border-2 border-slate-950"
+                  >
+                    Compreendido
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

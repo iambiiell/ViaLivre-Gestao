@@ -223,6 +223,8 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
 
   const [formData, setFormData] = useState<Partial<User>>(initialForm);
 
+  const [editingOccurrenceId, setEditingOccurrenceId] = useState<string | null>(null);
+
   React.useEffect(() => {
     if (initialUserData) {
       const roleConf = roleConfigs.find(rc => rc.name === initialUserData.job_title);
@@ -231,6 +233,8 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
         ...initialUserData,
         permissions: roleConf ? roleConf.permissions : (initialUserData.permissions || [])
       });
+      setOccurrences(initialUserData.occurrences || []);
+      setEditingOccurrenceId(null);
       setEditingId(null);
       setValidationAttempted(false);
       setIsModalOpen(true);
@@ -285,6 +289,9 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
   const handleOpenNew = () => {
     setEditingId(null);
     setFormData(initialForm);
+    setOccurrences([]);
+    setEditingOccurrenceId(null);
+    setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
     setValidationAttempted(false);
     setIsModalOpen(true);
   };
@@ -296,6 +303,9 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
         ...driver,
         permissions: roleConf ? roleConf.permissions : (driver.permissions || [])
     });
+    setOccurrences(driver.occurrences || []);
+    setEditingOccurrenceId(null);
+    setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
     setValidationAttempted(false);
     setIsModalOpen(true);
   };
@@ -350,7 +360,7 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
       else if (title.includes("Motorista")) role = 'DRIVER';
     }
 
-    const payload = { ...formData, role } as User;
+    const payload = { ...formData, role, occurrences } as User;
     
     // daily_hours_target validation
     if (payload.daily_hours_target) {
@@ -874,7 +884,9 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
                 {activeTab === 'OCCURRENCES' && (
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-8">
                   <div className="bg-slate-50 dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800">
-                    <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest mb-6">Nova Ocorrência</h4>
+                    <h4 className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest mb-6">
+                      {editingOccurrenceId ? "Editar Ocorrência" : "Nova Ocorrência"}
+                    </h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       <div>
                         <label className="block text-[8px] font-black text-slate-400 uppercase mb-1 ml-2">Tipo</label>
@@ -932,16 +944,33 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
                           <span className="text-[9px] font-black text-slate-500 uppercase">Justificado</span>
                         </label>
                       </div>
-                      <div className="md:col-span-4 flex justify-end">
+                      <div className="md:col-span-4 flex justify-end gap-2">
+                        {editingOccurrenceId && (
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
+                              setEditingOccurrenceId(null);
+                            }}
+                            className="bg-slate-200 text-slate-705 dark:bg-zinc-800 dark:text-zinc-300 px-6 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-slate-300 dark:hover:bg-zinc-700 transition-all border border-transparent"
+                          >
+                            Cancelar
+                          </button>
+                        )}
                         <button 
                           onClick={() => {
                             if (!newOccurrence.description) return alert("Preencha a descrição.");
-                            setOccurrences([...occurrences, { ...newOccurrence, id: Date.now().toString() }]);
+                            if (editingOccurrenceId) {
+                              setOccurrences(occurrences.map(o => o.id === editingOccurrenceId ? { ...o, ...newOccurrence } : o));
+                            } else {
+                              setOccurrences([...occurrences, { ...newOccurrence, id: Date.now().toString() }]);
+                            }
                             setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
+                            setEditingOccurrenceId(null);
                           }}
                           className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black uppercase text-[9px] tracking-widest hover:bg-black transition-all"
                         >
-                          Adicionar Ocorrência
+                          {editingOccurrenceId ? "Salvar Alterações" : "Adicionar Ocorrência"}
                         </button>
                       </div>
                     </div>
@@ -975,9 +1004,37 @@ const DriverManager: React.FC<DriverManagerProps> = ({ drivers = [], cities = []
                                 <p className="text-[9px] text-slate-500 uppercase font-bold">{new Date(occ.date).toLocaleDateString('pt-BR')} • {occ.description}</p>
                               </div>
                             </div>
-                            <button onClick={() => setOccurrences(occurrences.filter(o => o.id !== occ.id))} className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
-                              <Trash2 size={16} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                              <button 
+                                onClick={() => {
+                                  setEditingOccurrenceId(occ.id);
+                                  setNewOccurrence({
+                                    type: occ.type,
+                                    date: occ.date,
+                                    description: occ.description,
+                                    hours_lost: occ.hours_lost || '00:00',
+                                    is_justified: occ.is_justified || false
+                                  });
+                                }} 
+                                className="p-2 text-slate-300 hover:text-yellow-500 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Editar"
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  if (editingOccurrenceId === occ.id) {
+                                    setNewOccurrence({ type: 'FALTA', date: new Date().toISOString().split('T')[0], description: '', hours_lost: '00:00', is_justified: false });
+                                    setEditingOccurrenceId(null);
+                                  }
+                                  setOccurrences(occurrences.filter(o => o.id !== occ.id));
+                                }} 
+                                className="p-2 text-slate-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                                title="Excluir"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>

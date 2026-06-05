@@ -182,6 +182,7 @@ export interface User {
   is_full_admin?: boolean;
   activation_key?: string;
   cnh_limit?: number;
+  occurrences?: Occurrence[];
 }
 
 export type UserRole = 'ADMIN' | 'DRIVER' | 'RH' | 'MECHANIC' | 'FISCAL' | 'TICKET_AGENT' | 'CONDUCTOR' | 'PASSENGER';
@@ -328,6 +329,7 @@ export interface TicketBooth {
   name: string;
   cnpj: string;
   ie?: string;
+  cep?: string;
   address_street: string;
   address_number: string;
   address_neighborhood: string;
@@ -614,6 +616,7 @@ export interface SystemSettings {
   system_name?: string;
   system_logo?: string;
   system_url?: string;
+  theme_color?: string;
   maintenance_intervals?: { [vehicleType: string]: number };
 }
 

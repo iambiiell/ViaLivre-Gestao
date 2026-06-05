@@ -19,7 +19,7 @@ interface PassengerInterfaceProps {
   vehicles?: Vehicle[];
   addToast: (message: string, type?: 'success' | 'error' | 'warning') => void;
   onExit: () => void;
-  onOpenTicketing: (tripId?: string, passengerData?: any) => void;
+  onOpenTicketing: (tripId?: string, passengerData?: any, routeId?: string) => void;
 }
 
 const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, companies, cities = [], notices = [], vehicles = [], addToast, onExit, onOpenTicketing }) => {
@@ -48,6 +48,7 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
   const [loginContext, setLoginContext] = useState<'GENERAL' | 'PURCHASE'>('GENERAL');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [selectedLoginTab, setSelectedLoginTab] = useState<'PASSENGER' | 'CARD'>('PASSENGER');
   
   const [registrationForm, setRegistrationForm] = useState<Partial<ImpCard>>({
     name: '',
@@ -74,50 +75,66 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
   });
 
   const handleRegisterPassenger = async () => {
-    if (!registrationForm.cpf || !registrationForm.name || (loginContext !== 'PURCHASE' && !registrationForm.password)) {
+    if (!registrationForm.cpf || !registrationForm.name || !registrationForm.password) {
         addToast("CPF, Nome e Senha são obrigatórios.", "warning");
         return;
     }
     
     setIsRecharging(true);
     try {
-        if (loginContext === 'PURCHASE') {
-            // Guest registration for purchase - No ImpCard created
-            const guestCard: Partial<ImpCard> = { 
-                ...registrationForm, 
-                card_number: 'GUEST', 
+        const cards = await db.getImpCards();
+        const cleanRegCpf = (registrationForm.cpf || '').replace(/\D/g, '');
+        
+        // Find if this CPF is already registered in the selected scope (PASSENGER vs CARD)
+        const exists = cards.some(c => 
+          (c.cpf || '').replace(/\D/g, '') === cleanRegCpf && 
+          (selectedLoginTab === 'PASSENGER' ? c.is_passenger_buyer : !c.is_passenger_buyer)
+        );
+
+        if (exists) {
+            addToast(`Este CPF já possui cadastro de ${selectedLoginTab === 'PASSENGER' ? 'passageiro' : 'cartão de transporte'}.`, "error");
+            return;
+        }
+
+        if (selectedLoginTab === 'PASSENGER') {
+            // Register a permanent purchase/passenger buyer
+            const newPassenger = await db.create<ImpCard>('imp_cards', {
+                ...registrationForm,
+                card_number: 'PASS-' + Math.floor(100000 + Math.random() * 900000).toString(),
+                type: 'Especial',
+                is_passenger_buyer: true,
                 balance: 0,
-                type: 'Vale Transporte'
-            };
-            setLoggedInCard(guestCard as ImpCard);
+                created_at: new Date().toISOString()
+            } as any);
+
+            addToast("Cadastro de Passageiro realizado! Prossiga com sua compra.", "success");
+            setLoggedInCard(newPassenger);
             setIsCardLoggedIn(true);
-            setIsGuest(true);
+            setIsGuest(true); // IsGuest=true is used to display passenger profile card (no balance/recharges)
             setIsRegistering(false);
             setShowCardLogin(false);
-            addToast("Cadastro realizado para compra. Prossiga para selecionar o assento.", "success");
-            onOpenTicketing();
+            
+            // If we are purchasing, pass it to selected route details
+            onOpenTicketing(undefined, newPassenger, selectedRouteDetails?.id);
+            return;
+        } else {
+            // Register a traditional transport card account
+            const cardNumber = Math.floor(10000000 + Math.random() * 90000000).toString();
+            const newCard = await db.create<ImpCard>('imp_cards', {
+                ...registrationForm,
+                card_number: cardNumber,
+                is_passenger_buyer: false,
+                created_at: new Date().toISOString()
+            } as ImpCard);
+
+            addToast(`Cadastro de Cartão registrado! Número: ${cardNumber}`, "success");
+            setLoggedInCard(newCard);
+            setIsCardLoggedIn(true);
+            setIsGuest(false);
+            setIsRegistering(false);
+            setShowCardLogin(false);
             return;
         }
-
-        const cards = await db.getImpCards();
-        if (cards.some(c => c.cpf === registrationForm.cpf)) {
-            addToast("Este CPF já possui um cartão cadastrado.", "error");
-            return;
-        }
-
-        const cardNumber = Math.floor(10000000 + Math.random() * 90000000).toString();
-        const newCard = await db.create<ImpCard>('imp_cards', {
-            ...registrationForm,
-            card_number: cardNumber,
-            created_at: new Date().toISOString()
-        } as ImpCard);
-
-        addToast(`Cadastro realizado! Seu cartão é: ${cardNumber}`, "success");
-        setLoggedInCard(newCard);
-        setIsCardLoggedIn(true);
-        setIsGuest(false);
-        setIsRegistering(false);
-        setShowCardLogin(false);
     } catch (error) {
         addToast("Erro ao realizar cadastro.", "error");
     } finally {
@@ -262,11 +279,14 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
     }
     try {
       const cards = await db.getImpCards();
-      const found = cards.find(c => 
-        c.cpf === rechargeQuery || 
-        c.card_number === rechargeQuery || 
-        `${c.name} ${c.surname}`.toLowerCase().includes(rechargeQuery.toLowerCase())
-      );
+      const found = cards.find(c => {
+        const cleanCpf = (c.cpf || '').replace(/\D/g, '');
+        const cleanCard = (c.card_number || '').replace(/\D/g, '');
+        if (cleanQuery && (cleanCpf === cleanQuery || cleanCard === cleanQuery)) {
+          return true;
+        }
+        return `${c.name} ${c.surname}`.toLowerCase().includes(rechargeQuery.toLowerCase());
+      });
       if (found) {
         setRechargeCard(found);
       } else {
@@ -311,11 +331,26 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
     }
     try {
       const cards = await db.getImpCards();
-      const found = cards.find(c => c.cpf === loginIdentifier || c.card_number === loginIdentifier);
+      const found = cards.find(c => {
+        const cleanCpf = (c.cpf || '').replace(/\D/g, '');
+        const cleanCard = (c.card_number || '').replace(/\D/g, '');
+        
+        // Scope search depending on selectedLoginTab
+        const isTargetType = selectedLoginTab === 'PASSENGER' ? c.is_passenger_buyer === true : !c.is_passenger_buyer;
+        if (!isTargetType) return false;
+
+        const matchesInput = (cleanIdentifier && (cleanCpf === cleanIdentifier || cleanCard === cleanIdentifier)) ||
+                             c.cpf === loginIdentifier || c.card_number === loginIdentifier ||
+                             (cleanIdentifier && c.email && c.email.toLowerCase() === loginIdentifier.toLowerCase());
+        
+        return matchesInput;
+      });
+
       if (!found) {
-        addToast("Cartão não encontrado.", "error");
+        addToast(`Nenhum cadastro de ${selectedLoginTab === 'PASSENGER' ? 'passageiro' : 'cartão'} encontrado.`, "error");
         return;
       }
+
       if (!found.password) {
         setIsRegisteringPassword(true);
         setLoggedInCard(found);
@@ -323,7 +358,12 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
         if (found.password === loginPassword) {
           setLoggedInCard(found);
           setIsCardLoggedIn(true);
+          setIsGuest(selectedLoginTab === 'PASSENGER');
           setShowCardLogin(false);
+          addToast("Login realizado com sucesso!", "success");
+          if (loginContext === 'PURCHASE') {
+            onOpenTicketing(undefined, found, selectedRouteDetails?.id);
+          }
         } else {
           addToast("Senha incorreta.", "error");
         }
@@ -340,11 +380,15 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
     }
     if (!loggedInCard) return;
     try {
-      await db.update('imp_cards', { ...loggedInCard, password: newPassword });
+      const updatedCard = { ...loggedInCard, password: newPassword };
+      await db.update('imp_cards', updatedCard);
       setIsCardLoggedIn(true);
       setIsRegisteringPassword(false);
       setShowCardLogin(false);
       addToast("Senha cadastrada com sucesso!");
+      if (loginContext === 'PURCHASE') {
+        onOpenTicketing(undefined, updatedCard, selectedRouteDetails?.id);
+      }
     } catch (error) {
       addToast("Erro ao cadastrar senha.", "error");
     }
@@ -409,6 +453,9 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
       return notices.filter(n => !hiddenNotices.has(n.id));
   }, [notices, hiddenNotices]);
 
+  const now = new Date();
+  const currentTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 flex flex-col font-sans relative overflow-x-hidden md:max-w-3xl md:mx-auto shadow-2xl">
       
@@ -420,13 +467,36 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                           <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg bg-slate-900 text-white">
                               <SmartphoneNfc size={24}/>
                           </div>
-                        <h3 className="text-xl font-black uppercase italic">{isRegistering ? 'Cadastro de Passageiro' : loginContext === 'PURCHASE' ? 'Identificação de Compra' : 'Acesso ao Cartão'}</h3>
+                        <h3 className="text-xl font-black uppercase italic">{isRegistering ? (selectedLoginTab === 'PASSENGER' ? 'Cadastro de Passageiro' : 'Cadastro de Cartão') : selectedLoginTab === 'PASSENGER' ? 'Login Passageiro' : 'Acesso ao Cartão'}</h3>
                       </div>
                       <button onClick={() => { setShowCardLogin(false); setIsRegistering(false); }} className="p-2 bg-slate-900 text-white rounded-xl"><X size={20}/></button>
                   </div>
+                  {!isRegisteringPassword && (
+                      <div className="flex border-b dark:border-zinc-800 shrink-0 bg-slate-50 dark:bg-zinc-950">
+                          <button 
+                              type="button"
+                              onClick={() => { setSelectedLoginTab('PASSENGER'); setIsRegistering(false); }}
+                              className={`flex-1 py-4 text-[10px] uppercase font-black tracking-wider flex items-center justify-center gap-2 border-b-4 transition-all ${selectedLoginTab === 'PASSENGER' ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50/10' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                          >
+                              <Ticket size={14} />
+                              Comprar Passagens
+                          </button>
+                          <button 
+                              type="button"
+                              onClick={() => { setSelectedLoginTab('CARD'); setIsRegistering(false); }}
+                              className={`flex-1 py-4 text-[10px] uppercase font-black tracking-wider flex items-center justify-center gap-2 border-b-4 transition-all ${selectedLoginTab === 'CARD' ? 'border-yellow-400 text-yellow-600 dark:text-yellow-400 bg-yellow-50/10' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                          >
+                              <CreditCard size={14} />
+                              Cartão Transporte
+                          </button>
+                      </div>
+                  )}
                   <div className="p-8 space-y-6 overflow-y-auto">
-                      {loginContext === 'PURCHASE' && (
-                        <p className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 p-4 rounded-xl text-[10px] font-black uppercase leading-tight text-center border-2 border-indigo-100 dark:border-indigo-800">Para prosseguir com a compra é necessário realizar o cadastro ou login no sistema.</p>
+                      {selectedLoginTab === 'PASSENGER' && (
+                        <p className="bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 p-4 rounded-xl text-[10px] font-black uppercase leading-tight text-center border-2 border-indigo-100 dark:border-indigo-800">Para prosseguir com a compra é necessário realizar o cadastro de Passageiro ou fazer login.</p>
+                      )}
+                      {selectedLoginTab === 'CARD' && (
+                        <p className="bg-yellow-50 dark:bg-yellow-900/15 text-yellow-600 dark:text-yellow-400 p-4 rounded-xl text-[10px] font-black uppercase leading-tight text-center border-2 border-yellow-100 dark:border-yellow-900/20">Identifique-se com seu cartão ImpCard para ver saldos, histórico e recarregar.</p>
                       )}
                       {isRegistering ? (
                           <div className="space-y-4">
@@ -561,15 +631,39 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                       <TransportCard name={`${loggedInCard.name} ${loggedInCard.surname}`} cardNumber={loggedInCard.card_number} photoUrl={loggedInCard.photo_url} category={loggedInCard.type.toUpperCase()} />
                       <div className="w-full">
                           {isGuest ? (
-                              <div className="p-6 bg-blue-50 dark:bg-blue-900/10 rounded-[2rem] border-2 border-blue-100 dark:border-blue-900/20 text-center">
-                                  <p className="text-[10px] font-black text-blue-500 uppercase">Acesso de Passageiro</p>
-                                  <p className="text-sm font-black mt-2">Você está identificado para realizar sua compra.</p>
-                                  <p className="text-[10px] text-slate-400 mt-2 uppercase italic text-center">Perfil temporário para compra de passagem</p>
+                              <div className="p-6 bg-indigo-50 dark:bg-indigo-900/10 rounded-[2rem] border-2 border-indigo-100 dark:border-indigo-900/20 text-center space-y-4">
+                                  <p className="text-[10px] font-black text-indigo-500 uppercase">Acesso de Passageiro</p>
+                                  <p className="text-sm font-black mt-2">Você está identificado no sistema!</p>
+                                  <p className="text-[10px] text-slate-400 mt-2 uppercase italic text-center text-xs leading-relaxed">Seus dados cadastrados preencherão a identificação civil no checkout de compra automaticamente.</p>
+                                  <button 
+                                    onClick={() => {
+                                        setLoggedInCard(null);
+                                        setIsCardLoggedIn(false);
+                                        setIsGuest(false);
+                                        addToast("Você saiu da conta de passageiro com sucesso.", "success");
+                                    }}
+                                    className="px-6 py-2.5 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 transition-all hover:bg-red-700 active:scale-95"
+                                  >
+                                    Desconectar Conta
+                                  </button>
                               </div>
                           ) : (
-                              <div className="p-6 bg-slate-50 dark:bg-zinc-800 rounded-[2rem] border-2 border-slate-100 dark:border-zinc-700 text-center">
-                                  <p className="text-[10px] font-black text-slate-400 uppercase">Saldo do Cartão</p>
-                                  <p className="text-3xl font-black">R$ {loggedInCard.balance.toFixed(2)}</p>
+                              <div className="p-6 bg-slate-50 dark:bg-zinc-800 rounded-[2rem] border-2 border-slate-100 dark:border-zinc-700 text-center space-y-4">
+                                  <div>
+                                      <p className="text-[10px] font-black text-slate-400 uppercase">Saldo do Cartão</p>
+                                      <p className="text-3xl font-black text-emerald-600 dark:text-emerald-400">R$ {loggedInCard.balance?.toFixed(2) || '0.00'}</p>
+                                  </div>
+                                  <button 
+                                    onClick={() => {
+                                        setLoggedInCard(null);
+                                        setIsCardLoggedIn(false);
+                                        setIsGuest(false);
+                                        addToast("Você saiu da conta do cartão com sucesso.", "success");
+                                    }}
+                                    className="px-6 py-2.5 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider shrink-0 transition-all hover:bg-red-700 active:scale-95 mx-auto block"
+                                  >
+                                    Desconectar Cartão
+                                  </button>
                               </div>
                           )}
                       </div>
@@ -676,7 +770,7 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                       <div className="space-y-4">
                           <div className="flex justify-between items-center">
                               <h4 className="text-xs font-black uppercase italic flex items-center gap-2">
-                                <Clock size={14} className="text-yellow-500" /> Quadro de Horários
+                                <Clock size={14} className="text-yellow-500" /> Próximos Horários e Escalas Ativas
                               </h4>
                               <div className="flex bg-slate-100 dark:bg-zinc-800 p-1 rounded-lg">
                                   <button 
@@ -690,42 +784,58 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                               </div>
                           </div>
 
-                          <div className="grid grid-cols-1 gap-4">
-                              {[
-                                { label: 'Dias Úteis', data: selectedRouteDetails.schedule?.weekdays },
-                                { label: 'Sábados', data: selectedRouteDetails.schedule?.saturday },
-                                { label: 'Domingos e Feriados', data: selectedRouteDetails.schedule?.sunday }
-                              ].map((group, idx) => {
-                                  const filteredTimes = group.data?.filter(t => t.direction === detailDirection) || [];
+                          {selectedRouteDetails.route_type === 'URBANO' ? (
+                              <div className="p-6 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/40 rounded-3xl text-center text-[10px] font-black uppercase space-y-2">
+                                  <p className="font-extrabold text-xs">Rota Urbana</p>
+                                  <p className="text-[9px] text-slate-500 dark:text-zinc-400 italic font-bold">As rotas urbanas não estão liberadas para venda de passagens antecipada ou autoatendimento. Pague diretamente ao operador a bordo do veículo.</p>
+                              </div>
+                          ) : (
+                              (() => {
+                                  const upcomingTripsForModal = trips
+                                      .filter(t => t.route_id === selectedRouteDetails.id && !t.finished && t.direction === detailDirection && t.departure_time >= currentTimeStr)
+                                      .sort((a, b) => a.departure_time.localeCompare(b.departure_time));
                                   return (
-                                      <div key={idx} className="p-4 bg-slate-50 dark:bg-zinc-800/30 rounded-2xl border border-slate-100 dark:border-zinc-800">
-                                          <p className="text-[10px] font-black uppercase text-slate-400 mb-2 border-b dark:border-zinc-700 pb-1">{group.label}</p>
-                                          <div className="flex flex-wrap gap-2">
-                                              {filteredTimes.length > 0 ? filteredTimes.map((t, tidx) => (
-                                                  <button 
-                                                    key={tidx} 
-                                                    onClick={() => {
-                                                        if (!isCardLoggedIn) {
-                                                            setLoginContext('PURCHASE');
-                                                            setShowCardLogin(true);
-                                                            addToast("Para comprar este horário, faça login ou cadastre-se.", "info");
-                                                        } else {
-                                                            onOpenTicketing(undefined, isGuest ? loggedInCard : undefined, selectedRouteDetails.id);
-                                                        }
-                                                    }}
-                                                    className="group relative px-4 py-2 bg-indigo-600 dark:bg-indigo-500 rounded-xl text-[10px] font-black text-white hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg hover:scale-105 active:scale-95"
-                                                  >
-                                                    {t.time}
-                                                    <div className="w-px h-3 bg-white/20 mx-1"></div>
-                                                    <span className="uppercase text-[8px]">Comprar</span>
-                                                    <ShoppingCart size={12} className="text-white/70"/>
-                                                  </button>
-                                              )) : <span className="text-[8px] italic text-slate-400">Sem horários para esta direção</span>}
-                                          </div>
+                                      <div className="grid grid-cols-1 gap-3">
+                                          {upcomingTripsForModal.length > 0 ? upcomingTripsForModal.map((t, tidx) => (
+                                              <div 
+                                                key={tidx} 
+                                                className="p-4 bg-slate-50 dark:bg-zinc-800/40 rounded-2xl border border-slate-150 dark:border-zinc-805 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                                              >
+                                                <div className="flex-1 space-y-1.5 text-left">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className="px-2.5 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-extrabold rounded-xl text-xs">{t.departure_time}</span>
+                                                        <span className="px-2 py-0.5 bg-yellow-400/20 text-yellow-700 dark:text-yellow-400 font-extrabold rounded-lg text-[9px] uppercase">Ônibus prefixo: {t.bus_number}</span>
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-extrabold uppercase">
+                                                        <span className="block">Motorista: {t.driver_name}</span>
+                                                        {t.conductor_name && <span className="block text-[9px] text-slate-400">Cobrador: {t.conductor_name}</span>}
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                  onClick={() => {
+                                                      if (!isCardLoggedIn) {
+                                                          setLoginContext('PURCHASE');
+                                                          setShowCardLogin(true);
+                                                          addToast("Para comprar este horário, faça login ou cadastre-se.", "info");
+                                                      } else {
+                                                          onOpenTicketing(t.id, loggedInCard || undefined, selectedRouteDetails.id);
+                                                      }
+                                                  }}
+                                                  className="px-4 py-2.5 bg-indigo-600 dark:bg-indigo-500 text-white hover:bg-slate-900 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
+                                                >
+                                                  <span>Comprar</span>
+                                                  <ShoppingCart size={13} className="text-white/70"/>
+                                                </button>
+                                              </div>
+                                          )) : (
+                                              <div className="py-8 text-center text-slate-400 text-[10px] font-black uppercase italic border border-dashed rounded-2xl">
+                                                  Sem escalas agendadas a partir do horário real na direção {detailDirection === 'IDA' ? 'Ida' : 'Volta'}
+                                              </div>
+                                          )}
                                       </div>
                                   );
-                              })}
-                          </div>
+                              })()
+                          )}
                       </div>
                   </div>
                   <div className="p-6 bg-slate-50 dark:bg-zinc-900 border-t dark:border-zinc-800 flex flex-col gap-2 shrink-0">
@@ -768,12 +878,11 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                             <h3 className="text-white font-black uppercase italic">Bilhete Digital</h3>
                             <button 
                                 onClick={() => {
-                                    setActiveTab('routes');
-                                    addToast("Primeiro, escolha uma linha e horário de sua preferência.", "info");
+                                    onOpenTicketing(undefined, loggedInCard || undefined);
                                 }} 
-                                className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 shadow-xl"
+                                className="w-full py-4 bg-indigo-500 text-white rounded-2xl font-black uppercase text-xs flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] active:scale-95 transition-all"
                             >
-                                Escolher Rota e Horário
+                                <ShoppingCart size={16}/> Escolher Rota e Horário
                             </button>
                         </div>
 
@@ -791,26 +900,37 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({ routes, trips, 
                                             </div>
                                             <h4 className="font-black text-sm uppercase italic mb-3">{route.origin} x {route.destination}</h4>
                                             
-                                            <div className="pt-4 border-t dark:border-zinc-800 space-y-3">
-                                                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase">
-                                                    <Clock size={12}/> Próximos Horários:
-                                                </div>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {trips.filter(t => t.route_id === route.id && !t.finished).length > 0 ? (
-                                                        trips
-                                                            .filter(t => t.route_id === route.id && !t.finished)
-                                                            .sort((a, b) => a.departure_time.localeCompare(b.departure_time))
-                                                            .slice(0, 3)
-                                                            .map((t, idx) => (
-                                                                <span key={idx} className="px-2 py-1 bg-slate-50 dark:bg-zinc-800 rounded-md text-[10px] font-black border border-slate-200 dark:border-zinc-700">
-                                                                    {t.departure_time}
-                                                                </span>
-                                                            ))
-                                                    ) : (
-                                                        <span className="text-[9px] italic text-slate-300 uppercase">Sem viagens ativas</span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            {(() => {
+                                                const upcomingTrips = trips
+                                                    .filter(t => t.route_id === route.id && !t.finished && t.departure_time >= currentTimeStr)
+                                                    .sort((a, b) => a.departure_time.localeCompare(b.departure_time))
+                                                    .slice(0, 3);
+                                                return (
+                                                    <div className="pt-4 border-t dark:border-zinc-800 space-y-3">
+                                                        <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase">
+                                                            <Clock size={12}/> Próximos Horários (a partir do real):
+                                                        </div>
+                                                        <div className="grid gap-2">
+                                                            {upcomingTrips.length > 0 ? (
+                                                                upcomingTrips.map((t, idx) => (
+                                                                    <div key={idx} className="p-3 bg-slate-50 dark:bg-zinc-800/40 rounded-xl border border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-left">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="px-2 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-black rounded-lg text-[10px]">{t.departure_time}</span>
+                                                                            <div className="flex flex-col text-[9px] leading-tight text-slate-500 dark:text-zinc-400 font-medium uppercase">
+                                                                                <span>Mot: {t.driver_name}</span>
+                                                                                {t.conductor_name && <span>Cob: {t.conductor_name}</span>}
+                                                                            </div>
+                                                                        </div>
+                                                                        <span className="px-2 py-0.5 bg-yellow-400/15 text-yellow-600 dark:text-yellow-400 font-bold rounded text-[8px] uppercase self-start sm:self-auto">Ônibus: {t.bus_number}</span>
+                                                                    </div>
+                                                                ))
+                                                            ) : (
+                                                                <span className="text-[9px] italic text-slate-400 uppercase">Sem horários agendados a partir de agora</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     );
                                 })

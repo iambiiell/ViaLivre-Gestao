@@ -2,13 +2,32 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { TicketSale, Trip, BusRoute, Company, Vehicle } from '../types';
-import { db } from '../services/database';
+import { db, supabase } from '../services/database';
 
 export const downloadTicket = async (saleId: string, originName?: string, destinationName?: string) => {
   try {
     // 1. Buscar dados da venda
-    const sales = await db.getSales();
-    const sale = sales.find(s => s.id === saleId);
+    let sale: TicketSale | undefined;
+    try {
+      const sales = await db.getSales();
+      sale = sales.find(s => s.id === saleId);
+    } catch (e) {
+      console.warn("Failed fetching all sales, falling back to direct query:", e);
+    }
+
+    if (!sale) {
+      // Direct lookup from Supabase using saleId bypass to support Passenger Interface lookup when system_id is not set
+      const { data, error } = await supabase
+        .from('ticket_sales')
+        .select('*')
+        .eq('id', saleId)
+        .single();
+        
+      if (data) {
+        sale = data as TicketSale;
+      }
+    }
+
     if (!sale) throw new Error("Venda não encontrada");
 
     // 2. Buscar dados relacionados
@@ -19,7 +38,7 @@ export const downloadTicket = async (saleId: string, originName?: string, destin
     const route = routes.find(r => r.id === (trip?.route_id));
 
     const companies = await db.getCompanies();
-    const company = sale.company_data || companies.find(c => c.id === route?.company_id);
+    const company = (sale.booth_data || sale.company_data || companies.find(c => c.id === route?.company_id)) as any;
 
     // 3. Gerar QR Code
     const qrCodeData = `BPE|${sale.id}|${sale.passenger_cpf}|${sale.total_price}`;
@@ -116,7 +135,7 @@ export const downloadTicket = async (saleId: string, originName?: string, destin
 
       // Passenger and Price
       doc.rect(10, yOffset + 83, 110, 22);
-      doc.rect(125, yOffset + 83, 75, 22); // Slightly larger
+      doc.rect(125, yOffset + 83, 75, 28); // Increased height to prevent total price overlapping
       
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');

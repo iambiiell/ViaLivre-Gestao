@@ -1,8 +1,9 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Vehicle, User, Company, City, Inspection, VehicleClass, TicketingConfig, Skin } from '../types';
-import { Plus, Pencil, Trash2, X, Save, Bus, Loader2, Building2, MapPin, Calendar, ClipboardCheck, Info, Copy, Search, CheckCircle2, AlertTriangle, Users, Palette } from 'lucide-react';
+import { Vehicle, User, Company, City, Inspection, VehicleClass, TicketingConfig, Skin, MaintenanceRecord } from '../types';
+import { Plus, Pencil, Trash2, X, Save, Bus, Loader2, Building2, MapPin, Calendar, ClipboardCheck, Info, Copy, Search, CheckCircle2, AlertTriangle, Users, Palette, Wrench } from 'lucide-react';
+import { supabase } from '../services/database';
 
 interface VehicleManagerProps {
   vehicles: Vehicle[];
@@ -12,6 +13,7 @@ interface VehicleManagerProps {
   inspections: Inspection[];
   ticketingConfig: TicketingConfig | null;
   skins: Skin[];
+  systemSettings?: any;
   onAddVehicle: (vehicle: Vehicle) => void;
   onUpdateVehicle: (vehicle: Vehicle) => void;
   onDeleteVehicle: (id: string) => void;
@@ -33,11 +35,13 @@ const VEHICLE_CLASSES: { id: VehicleClass, label: string }[] = [
 
 const VehicleManager: React.FC<VehicleManagerProps> = ({ 
   vehicles = [], 
+  currentUser,
   companies = [], 
   cities = [], 
   inspections = [],
   ticketingConfig,
   skins = [],
+  systemSettings,
   onAddVehicle, 
   onUpdateVehicle, 
   onDeleteVehicle,
@@ -47,6 +51,33 @@ const VehicleManager: React.FC<VehicleManagerProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [maintenanceCosts, setMaintenanceCosts] = useState<Record<string, number>>({});
+  const [maintenanceRecords, setMaintenanceRecords] = useState<MaintenanceRecord[]>([]);
+
+  useEffect(() => {
+    const fetchMaintenanceData = async () => {
+      try {
+        let query = supabase.from('maintenance').select('id, cost, vehicle_id, date, service_type');
+        if (currentUser?.system_id) {
+          query = query.eq('system_id', currentUser.system_id);
+        }
+        const { data, error } = await query;
+        if (!error && data) {
+          setMaintenanceRecords(data as MaintenanceRecord[]);
+          const costMap: Record<string, number> = {};
+          data.forEach((m: any) => {
+            const vId = m.vehicle_id;
+            const costVal = Number(m.cost) || 0;
+            costMap[vId] = (costMap[vId] || 0) + costVal;
+          });
+          setMaintenanceCosts(costMap);
+        }
+      } catch (err) {
+        console.error("Erro ao puxar dados de manutenção:", err);
+      }
+    };
+    fetchMaintenanceData();
+  }, [vehicles, currentUser]);
 
   const allVehicleClasses = useMemo(() => {
     const base = [...VEHICLE_CLASSES];
@@ -79,10 +110,33 @@ const VehicleManager: React.FC<VehicleManagerProps> = ({
 
   const [formData, setFormData] = useState<any>(initialFormState);
 
+  const getVehicleNextMaintenanceDaysLeft = (vehicle: Vehicle) => {
+    const logsForVehicle = maintenanceRecords.filter(l => l.vehicle_id === vehicle.id && l.service_type === 'PREVENTIVA');
+    if (logsForVehicle.length === 0) {
+      return { daysLeft: null, nextDateStr: 'Não realizada' };
+    }
+    const sorted = [...logsForVehicle].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const lastPreventive = sorted[0];
+    const intervalMonths = systemSettings?.maintenance_intervals?.[vehicle.vehicle_type] || 6;
+    
+    const nextDate = new Date(lastPreventive.date);
+    nextDate.setMonth(nextDate.getMonth() + intervalMonths);
+    
+    const today = new Date();
+    const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const nextMidnight = new Date(nextDate.getFullYear(), nextDate.getMonth(), nextDate.getDate());
+    
+    const diffTime = nextMidnight.getTime() - todayMidnight.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return { daysLeft: diffDays, nextDateStr: nextDate.toLocaleDateString('pt-BR') };
+  };
+
   const filteredVehicles = useMemo(() => {
     return vehicles.filter(v => 
       v.prefix.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      v.plate.toLowerCase().includes(searchTerm.toLowerCase())
+      v.plate.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v.chassis || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v.model || '').toLowerCase().includes(searchTerm.toLowerCase())
     ).sort((a, b) => a.prefix.localeCompare(b.prefix, undefined, { numeric: true }));
   }, [vehicles, searchTerm]);
 
@@ -197,10 +251,49 @@ const VehicleManager: React.FC<VehicleManagerProps> = ({
         </button>
       </div>
 
+      {/* Componente de Resumo com Efeito Liquid Glass */}
+      <div className="relative overflow-hidden rounded-[2.5rem] bg-indigo-500/10 dark:bg-zinc-900/30 p-8 border border-white/30 dark:border-zinc-800/60 backdrop-blur-xl shadow-[0_20px_50px_rgba(8,112,184,0.08)]">
+        <div className="absolute -top-24 -left-20 w-48 h-48 bg-blue-500/20 dark:bg-blue-600/10 rounded-full filter blur-[60px]" />
+        <div className="absolute -bottom-24 -right-20 w-48 h-48 bg-purple-500/20 dark:bg-purple-600/10 rounded-full filter blur-[60px]" />
+        
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-white/40 dark:bg-zinc-800/40 rounded-2xl flex items-center justify-center text-blue-600 dark:text-blue-400 border border-white/50 dark:border-zinc-700/55 shadow-sm">
+                  <Wrench size={28} className="animate-pulse" />
+              </div>
+              <div>
+                  <h3 className="font-black text-slate-800 dark:text-zinc-100 text-xl uppercase italic tracking-tight">
+                    Gasto Total de Manutenção por ônibus
+                  </h3>
+                  <p className="text-[10px] text-slate-500 dark:text-zinc-400 font-bold uppercase tracking-wider">Custos consolidados atualizados em tempo real via Supabase</p>
+              </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-4 items-center overflow-x-auto pb-2 lg:pb-0 max-w-full custom-scrollbar">
+            {vehicles.map(vehicle => {
+              const cost = maintenanceCosts[vehicle.id] || 0;
+              return (
+                <div key={vehicle.id} className="bg-white/45 dark:bg-zinc-900/40 border border-white/50 dark:border-zinc-800/50 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[130px] shrink-0 backdrop-blur-md shadow-sm">
+                  <span className="text-[9px] font-black text-slate-700 dark:text-zinc-200 uppercase">#{vehicle.prefix}</span>
+                  <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{vehicle.plate}</span>
+                  <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-2">
+                    R$ {cost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              );
+            })}
+            {vehicles.length === 0 && (
+              <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-400 uppercase italic">Nenhum ativo cadastrado na frota para exibir custos.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-x-visible md:pb-8 md:snap-none custom-scrollbar">
         {filteredVehicles.map(vehicle => {
           const lastInsp = getLastInspectionDate(vehicle.id);
-          const isAtivo = vehicle.status === 'ATIVO';
+          const { daysLeft, nextDateStr } = getVehicleNextMaintenanceDaysLeft(vehicle);
+          const hasMaintenanceAlert = daysLeft !== null && daysLeft < 7;
 
           return (
             <motion.div 
@@ -209,17 +302,33 @@ const VehicleManager: React.FC<VehicleManagerProps> = ({
               whileHover={{ scale: 1.02 }}
               transition={{ type: "spring", stiffness: 300, damping: 20 }}
             >
-              <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] shadow-sm border-2 border-yellow-400 relative group overflow-hidden transition-all hover:shadow-xl duration-300 h-full bg-gradient-to-br from-white via-white to-yellow-50/30 dark:from-zinc-900 dark:via-zinc-900 dark:to-yellow-900/5">
-                <div className={`absolute top-0 right-0 px-4 py-1 rounded-bl-2xl font-black text-[8px] uppercase tracking-widest ${isAtivo ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'}`}>
-                    {vehicle.status}
+              <div className={`p-6 rounded-[2.5rem] shadow-sm relative group overflow-hidden transition-all hover:shadow-xl duration-300 h-full bg-gradient-to-br bg-white dark:bg-zinc-900 border-2 ${
+                hasMaintenanceAlert 
+                  ? 'border-rose-500 shadow-[0_0_15px_rgba(239,68,68,0.15)] from-white via-white to-rose-50/20 dark:from-zinc-900 dark:via-zinc-900 dark:to-rose-950/10'
+                  : 'border-yellow-400 from-white via-white to-yellow-50/30 dark:from-zinc-900 dark:via-zinc-900 dark:to-yellow-900/5'
+              }`}>
+                <div className={`absolute top-0 right-0 px-4 py-1.5 rounded-bl-2xl font-black text-[8px] uppercase tracking-widest flex items-center gap-1 shadow-sm ${
+                  vehicle.status === 'ATIVO' ? 'bg-emerald-500 text-white' :
+                  vehicle.status === 'MANUTENCAO' ? 'bg-amber-500 text-white' :
+                  'bg-rose-500 text-white'
+                }`}>
+                  {vehicle.status === 'ATIVO' && <CheckCircle2 size={10} />}
+                  {vehicle.status === 'MANUTENCAO' && <Wrench size={10} />}
+                  {vehicle.status === 'INATIVO' && <X size={10} />}
+                  {vehicle.status === 'ATIVO' ? 'Operacional' : vehicle.status === 'MANUTENCAO' ? 'Em Manutenção' : 'Inativo'}
                 </div>
                 
                 <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-slate-400 border-2 border-yellow-400 shadow-inner">
-                        <Bus size={32} className={isAtivo ? 'text-indigo-500' : 'text-slate-400'} />
+                    <div className={`w-16 h-16 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-center text-slate-400 border-2 shadow-inner ${
+                      hasMaintenanceAlert ? 'border-rose-500 animate-pulse' : 'border-yellow-400'
+                    }`}>
+                        <Bus size={32} className={vehicle.status === 'ATIVO' ? 'text-indigo-500' : 'text-slate-400'} />
                     </div>
                     <div className="flex-1">
-                        <h3 className="font-black text-slate-800 dark:text-zinc-100 text-2xl italic uppercase tracking-tighter">#{vehicle.prefix}</h3>
+                        <h3 className="font-black text-slate-800 dark:text-zinc-100 text-2xl italic uppercase tracking-tighter flex items-center gap-2">
+                          #{vehicle.prefix}
+                          {hasMaintenanceAlert && <AlertTriangle className="text-rose-500 animate-pulse" size={18} />}
+                        </h3>
                         <p className="text-[10px] text-blue-600 font-black tracking-widest uppercase">{vehicle.plate}</p>
                         <div className="flex gap-2 mt-1">
                           <span className="text-[7px] bg-yellow-400 text-slate-900 px-2 py-0.5 rounded font-black uppercase">
@@ -238,10 +347,17 @@ const VehicleManager: React.FC<VehicleManagerProps> = ({
                     {vehicle.skin_id && (
                       <p className="flex items-center gap-2"><Palette size={12} className="text-indigo-500"/> Skin: {skins.find(s => s.id === vehicle.skin_id)?.skin_name || 'Personalizada'}</p>
                     )}
+                    <p className="flex items-center gap-2"><Wrench size={12} className="text-red-500"/> Gasto Manutenção: <span className="font-black text-red-600 dark:text-red-400 ml-auto">R$ {(maintenanceCosts[vehicle.id] || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></p>
                     <div className="flex items-center justify-between pt-2 border-t dark:border-zinc-800">
                         <span className="flex items-center gap-2"><ClipboardCheck size={12} className="text-emerald-500"/> Última Vistoria:</span>
                         <span className="font-black text-slate-700 dark:text-zinc-300">{lastInsp.split('-').reverse().join('/')}</span>
                     </div>
+                    {hasMaintenanceAlert && (
+                      <div className="mt-4 flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-400 px-3 py-2 rounded-2xl border border-rose-100 dark:border-rose-900/30 font-black uppercase text-[8px] animate-pulse">
+                        <AlertTriangle size={14} className="text-rose-500 shrink-0" />
+                        <span>Próxima Manutenção: {daysLeft < 0 ? 'Atrasada' : `Em ${daysLeft} dias`} ({nextDateStr})</span>
+                      </div>
+                    )}
                 </div>
 
                 <div className="flex justify-end gap-2 mt-6 pt-4 border-t dark:border-zinc-800 transition-colors items-center">

@@ -173,7 +173,7 @@ const DriverShiftManager: React.FC<DriverShiftManagerProps> = ({
                       </div>
                     </div>
                   </div>
-                  <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex gap-2 items-center">
                     <button onClick={() => { setEditingShift(shift); setIsModalOpen(true); }} className="p-3 text-blue-600 hover:bg-blue-50 rounded-xl transition-all"><Clock size={20}/></button>
                     <button onClick={() => onDeleteShift(shift.id)} className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={20}/></button>
                   </div>

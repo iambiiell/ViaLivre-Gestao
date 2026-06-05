@@ -4,9 +4,9 @@ import React from 'react';
 import { BusFront, Download } from 'lucide-react';
 
 const AboutSection: React.FC<{ systemName?: string }> = ({ systemName }) => {
-  const whatsappNumber = "5521995421447";
-  const whatsappMsg = encodeURIComponent("Olá! Estou entrando em contato através do sistema ViaLivre Gestão.");
-  const setupUrl = "https://github.com/vianicolausa/ViaLivre-Gestao/releases/download/v1.5.0/ViaLivre.Gestao-1.5.0.Setup.exe";
+  const whatsappNumber = "5524978358199";
+  const whatsappMsg = encodeURIComponent("Olá! Estou entrando em contato através do sistema Viação Nicolau S/A.");
+  const setupUrl = "https://github.com/vianicolausa/ViaLivre-Gestao/releases/download/v2.0/ViaLivre.Gestao-v2.0.Setup.exe";
 
   return (
     <div className="mt-12 pt-12 border-t border-slate-100 dark:border-zinc-800 text-center transition-opacity py-8">
@@ -20,7 +20,7 @@ const AboutSection: React.FC<{ systemName?: string }> = ({ systemName }) => {
               {systemName || 'ViaLivre Gestão'}
             </span>
             <span className="text-[10px] font-black text-yellow-600 uppercase tracking-widest bg-yellow-100 dark:bg-yellow-900/20 px-2 py-0.5 rounded-full mt-1 inline-block">
-              Versão v1.5.0
+              Versão v2.0
             </span>
             <p className="text-[7px] text-slate-400 font-bold uppercase mt-1 tracking-widest">Windows 10/11</p>
           </div>
@@ -49,10 +49,10 @@ const AboutSection: React.FC<{ systemName?: string }> = ({ systemName }) => {
 
         <div className="space-y-1">
           <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            Desenvolvedor por ViaLivre Gestão • Suporte: <a href="mailto:suporte@vialivre.com.br" className="text-yellow-600 hover:underline">suporte@vialivre.com.br</a>
+            Desenvolvedor por Viação Nicolau S/A • Suporte: <a href="mailto:via.nicolau.sa@gmail.com" className="text-yellow-600 hover:underline">via.nicolau.sa@gmail.com</a>
           </p>
           <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            Central de Atendimento: <a href={`tel:${whatsappNumber}`} className="text-yellow-600 hover:underline">(21) 9 9542-1447</a>
+            Central de Atendimento: <a href={`tel:${whatsappNumber}`} className="text-yellow-600 hover:underline">(24) 9 7835-8199</a>
           </p>
         </div>
       </div>

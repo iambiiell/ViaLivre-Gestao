@@ -440,7 +440,7 @@ const RecruitmentPanel: React.FC<RecruitmentPanelProps> = ({ addToast, initialAp
                     <div className="w-12 h-12 bg-yellow-400 rounded-2xl flex items-center justify-center shadow-lg border-2 border-slate-900">
                       <Briefcase className="text-slate-900" size={24} />
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-2 items-center">
                       <button 
                         onClick={() => {
                           setEditingVacancy(vacancy);

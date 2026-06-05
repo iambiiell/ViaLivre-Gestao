@@ -12,6 +12,7 @@ interface TicketVoucherProps {
 const TicketVoucher: React.FC<TicketVoucherProps> = ({ type, lastTicket, selectedRoute, selectedTrip }) => {
     if (!lastTicket) return null;
     const ticketId = lastTicket.id.slice(-8).toUpperCase();
+    const company = (lastTicket.booth_data || lastTicket.company_data) as any;
     return (
         <div className="border-2 border-black p-8 mb-6 relative bg-white text-black font-mono page-break-avoid">
             <div className="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
@@ -28,10 +29,10 @@ const TicketVoucher: React.FC<TicketVoucherProps> = ({ type, lastTicket, selecte
                         />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black uppercase leading-none">{lastTicket.company_data?.name || 'VIALIVRE GESTÃO'}</h2>
-                        <p className="text-[10px] uppercase mt-1">CNPJ: {lastTicket.company_data?.cnpj || '00.000.000/0001-99'}</p>
-                        <p className="text-[10px] uppercase">IE: {(!lastTicket.company_data?.ie || lastTicket.company_data.ie.trim() === '') ? 'ISENTO' : lastTicket.company_data.ie}</p>
-                        <p className="text-[8px] uppercase text-gray-500 mt-1 max-w-[250px]">{lastTicket.company_data?.address || 'ENDEREÇO NÃO CADASTRADO'}</p>
+                        <h2 className="text-xl font-black uppercase leading-none">{company?.name || 'VIALIVRE GESTÃO'}</h2>
+                        <p className="text-[10px] uppercase mt-1">CNPJ: {company?.cnpj || '00.000.000/0001-99'}</p>
+                        <p className="text-[10px] uppercase">IE: {(!company?.ie || company.ie.trim() === '') ? 'ISENTO' : company.ie}</p>
+                        <p className="text-[8px] uppercase text-gray-500 mt-1 max-w-[250px]">{company?.address || 'ENDEREÇO NÃO CADASTRADO'}</p>
                     </div>
                 </div>
                 <div className="text-right">

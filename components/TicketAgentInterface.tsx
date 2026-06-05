@@ -78,25 +78,12 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const [salesRefreshKey, setSalesRefreshKey] = useState(0);
   const [selectedSectionIndex, setSelectedSectionIndex] = useState<number>(-1);
   const [passengerForms, setPassengerForms] = useState<Record<number, PassengerForm>>({});
-  const [paymentMethod, setPaymentMethod] = useState<string>('DINHEIRO');
+  const [paymentMethod, setPaymentMethod] = useState<string>(isPassengerView ? 'PIX' : 'DINHEIRO');
   const [amountReceived, setAmountReceived] = useState<number>(0);
   const [changeAmount, setChangeAmount] = useState<number>(0);
   const [couponCode, setCouponCode] = useState('');
   const [discountValue, setDiscountValue] = useState(0);
 
-  // Reset discount if payment method changes to avoid bypass of coupon restrictions
-  useEffect(() => {
-    const normalizedMethod = (paymentMethod || '').toUpperCase().replace(/[_]/g, ' ');
-    if (discountValue > 0) {
-      setDiscountValue(0);
-      setCouponCode('');
-      addToast(`Pagamento alterado para ${normalizedMethod}. Re-aplique o cupom se necessário.`, "info");
-    }
-    if (normalizedMethod !== 'DINHEIRO') {
-      setAmountReceived(0);
-      setChangeAmount(0);
-    }
-  }, [paymentMethod]);
   const [isFinishing, setIsFinishing] = useState(false);
   const [isVerifyingVt, setIsVerifyingVt] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -117,17 +104,26 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const [saleIdBeingEdited, setSaleIdBeingEdited] = useState<string | null>(null);
   const [ticketBooths, setTicketBooths] = useState<TicketBooth[]>([]);
   const [selectedBoothId, setSelectedBoothId] = useState<string>('');
+  const [showBoothSelector, setShowBoothSelector] = useState(false);
 
   useEffect(() => {
     db.getTicketBooths().then(booths => {
         setTicketBooths(booths);
-        if (booths.length > 0) {
-            // Try to find a booth assigned to this user or just pick the first active one
-            const activeBooths = booths.filter(b => b.active);
-            if (activeBooths.length > 0) setSelectedBoothId(activeBooths[0].id);
+        const activeBooths = booths.filter(b => b.active);
+        if (activeBooths.length > 0) {
+            // Try to find a booth assigned to this user in localStorage or fallback
+            const savedId = localStorage.getItem(`vialivre_booth_${currentUser?.id || 'default'}`);
+            if (savedId && activeBooths.some(b => b.id === savedId)) {
+                setSelectedBoothId(savedId);
+            } else {
+                setSelectedBoothId(activeBooths[0].id);
+                if (!isPassengerView) {
+                    setShowBoothSelector(true);
+                }
+            }
         }
     });
-  }, []);
+  }, [currentUser, isPassengerView]);
 
   // Pre-fill passenger info from initial data if coming from Passenger Interface
   useEffect(() => {
@@ -292,6 +288,60 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   const selectedTrip = useMemo(() => trips.find(t => t.id === selectedTripId), [trips, selectedTripId]);
   const selectedVehicle = useMemo(() => vehicles.find(v => v.prefix === selectedTrip?.bus_number), [vehicles, selectedTrip]);
   const selectedCompany = useMemo(() => companies.find(c => c.id === selectedRoute?.company_id), [companies, selectedRoute]);
+
+  // Auto-link specific coupons or reset discount if payment method changes
+  useEffect(() => {
+    const normalizedMethod = (paymentMethod || '').toUpperCase().replace(/[\s_]/g, '');
+    let matchedCoupon: any = null;
+    
+    if (ticketingConfig?.active_coupons) {
+      matchedCoupon = ticketingConfig.active_coupons.find(c => {
+        if (c.conditions && c.conditions.includes('[PGTO:')) {
+          const reqMethod = c.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1]?.toUpperCase().replace(/[\s_]/g, '');
+          return reqMethod === normalizedMethod;
+        }
+        return false;
+      });
+    }
+
+    if (matchedCoupon) {
+      setCouponCode(matchedCoupon.code);
+      const basePrice = selectedSection ? (selectedSection.price || 0) : (selectedRoute?.price || 0);
+      const boardingFee = selectedSection ? (selectedSection.boarding_fee || 0) : (selectedRoute?.boarding_fee || 0);
+      const fullBase = basePrice + boardingFee;
+      const discount = matchedCoupon.type === 'PERCENT' ? (fullBase * (matchedCoupon.discount / 100)) : matchedCoupon.discount;
+      setDiscountValue(discount);
+      addToast(`Cupom Especial ${matchedCoupon.code} vinculado automaticamente ao pagamento ${paymentMethod.replace(/[_]/g, ' ')}!`, "success");
+    } else {
+      // Check if current applied coupon has a payment condition that is now violated.
+      // If it has NO payment condition, we do NOT clear it!
+      const currentActiveCoupon = ticketingConfig?.active_coupons?.find(c => c.code.toUpperCase() === couponCode.toUpperCase());
+      if (currentActiveCoupon && currentActiveCoupon.conditions && currentActiveCoupon.conditions.includes('[PGTO:')) {
+          const reqMethod = currentActiveCoupon.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1]?.toUpperCase().replace(/[\s_]/g, '');
+          if (reqMethod !== normalizedMethod) {
+              setDiscountValue(0);
+              setCouponCode('');
+              addToast(`Cupom removido devido à alteração na forma de pagamento.`, "info");
+          }
+      }
+    }
+    
+    if (paymentMethod.toUpperCase() !== 'DINHEIRO') {
+      setAmountReceived(0);
+      setChangeAmount(0);
+    }
+  }, [paymentMethod, ticketingConfig, selectedRoute, selectedSection]);
+
+  // Pre-fill card identifiers for active logged in user
+  useEffect(() => {
+    if (initialPassengerData) {
+      const idVal = initialPassengerData.cpf || initialPassengerData.card_number || '';
+      if (idVal) {
+        setVtIdentifier(idVal);
+        setImpCardIdentifier(idVal);
+      }
+    }
+  }, [initialPassengerData]);
 
   const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 
@@ -551,9 +601,8 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
             if (coupon.conditions && coupon.conditions.includes('[PGTO:')) {
                 const requiredMethod = coupon.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1];
                 if (requiredMethod && paymentMethod !== requiredMethod.toUpperCase()) {
-                    setDiscountValue(0);
-                    addToast(`Este cupom é válido apenas para pagamento via ${requiredMethod.toUpperCase()}.`, "warning");
-                    return;
+                    setPaymentMethod(requiredMethod.toUpperCase());
+                    addToast(`Forma de pagamento vinculada automaticamente para ${requiredMethod.toUpperCase()}.`, "success");
                 }
             }
 
@@ -646,7 +695,12 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                 booth_data: selectedBooth ? {
                     name: selectedBooth.name,
                     cnpj: selectedBooth.cnpj,
+                    ie: selectedBooth.ie || 'ISENTO',
                     phone: selectedBooth.phone,
+                    address_street: selectedBooth.address_street,
+                    address_number: selectedBooth.address_number,
+                    address_city: selectedBooth.address_city,
+                    address_state: selectedBooth.address_state,
                     address: `${selectedBooth.address_street}, ${selectedBooth.address_number} - ${selectedBooth.address_city}/${selectedBooth.address_state}`
                 } : undefined,
                 company_data: selectedCompany ? {
@@ -1006,7 +1060,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
               </button>
             </div>
             <div className="p-8 grid grid-cols-2 gap-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
-              {[...(ticketingConfig?.payment_methods || ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO', 'IMPCARD', 'VALE_TRANSPORTE'])]
+              {[...(ticketingConfig?.payment_methods || ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO', 'IMPCARD', 'VALE_TRANSPORTE'])].filter(m => !isPassengerView || m.toUpperCase().replace(/[ ]/g, '_') !== 'DINHEIRO')
                 .filter(method => {
                     const normM = method.toUpperCase().replace(/[ ]/g, '_');
                     if (currentUser?.role === 'CONDUCTOR' || selectedRoute?.route_type === 'URBANO') {
@@ -1048,15 +1102,112 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
   );
 
 
+  const BoothSelectorModal = () => (
+    <AnimatePresence>
+      {showBoothSelector && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={selectedBoothId ? () => setShowBoothSelector(false) : undefined}
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          />
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+            className="relative w-full max-w-md bg-white dark:bg-zinc-900 rounded-[3rem] shadow-2xl border-4 border-yellow-400 overflow-hidden"
+          >
+            <div className="p-8 border-b-2 border-slate-100 dark:border-zinc-800 flex justify-between items-center text-left">
+              <div>
+                <h3 className="text-2xl font-black uppercase italic dark:text-white leading-none">Guichê de Vendas</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-2">Escolha seu guichê de trabalho atual</p>
+              </div>
+              {selectedBoothId && (
+                <button 
+                  onClick={() => setShowBoothSelector(false)}
+                  className="p-3 bg-slate-100 dark:bg-zinc-800 rounded-2xl hover:text-red-500 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2 ml-2">Guichê Ativo *</label>
+                <select 
+                  className="w-full px-5 py-4 bg-slate-50 dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl font-bold outline-none focus:border-yellow-400 transition-all dark:text-white appearance-none h-14"
+                  value={selectedBoothId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    setSelectedBoothId(id);
+                    localStorage.setItem(`vialivre_booth_${currentUser?.id || 'default'}`, id);
+                  }}
+                >
+                  <option value="" disabled>Selecione um guichê...</option>
+                  {ticketBooths.filter(b => b.active).map(booth => (
+                    <option key={booth.id} value={booth.id}>
+                      {booth.name.toUpperCase()} ({booth.address_city})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {selectedBooth && (
+                <div className="bg-slate-50 dark:bg-zinc-800/50 p-4 rounded-2xl border border-slate-100 dark:border-zinc-800 space-y-2 text-xs">
+                  <p className="text-[9px] font-black uppercase text-slate-400">Dados do Guichê Selecionado</p>
+                  <p className="dark:text-white"><strong>CNPJ:</strong> {selectedBooth.cnpj}</p>
+                  {selectedBooth.ie && <p className="dark:text-white"><strong>Inscrição Estadual:</strong> {selectedBooth.ie}</p>}
+                  <p className="dark:text-white"><strong>Endereço:</strong> {selectedBooth.address_street}, {selectedBooth.address_number} - {selectedBooth.address_city}/{selectedBooth.address_state}</p>
+                  {selectedBooth.phone && <p className="dark:text-white"><strong>Telefone:</strong> {selectedBooth.phone}</p>}
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={!selectedBoothId}
+                onClick={() => {
+                  if (selectedBoothId) {
+                    setShowBoothSelector(false);
+                    addToast(`Guichê ${selectedBooth?.name || ''} selecionado com sucesso!`, "success");
+                  }
+                }}
+                className="w-full py-4 bg-yellow-400 text-slate-900 font-black uppercase rounded-2xl shadow-xl hover:bg-yellow-500 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none text-xs tracking-wider"
+              >
+                Confirmar Trabalho neste Guichê
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
+
   return (
     <div className="bg-white dark:bg-zinc-950 flex flex-col w-full h-full overflow-hidden transition-all no-print">
       <PaymentModal />
+      <BoothSelectorModal />
       <div className="bg-white dark:bg-zinc-900 text-slate-900 dark:text-white px-8 py-6 border-b-2 border-slate-100 dark:border-zinc-800 flex justify-between items-center z-10 no-print transition-colors">
         <div className="flex items-center gap-4">
            <div className="p-3 bg-yellow-400 rounded-2xl shadow-lg"><Ticket size={28} className="text-slate-900" /></div>
            <div>
                <h1 className="text-xl font-black uppercase italic tracking-tighter leading-none">{isPassengerView ? 'Autoatendimento' : 'Terminal de Vendas'}</h1>
-               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{isPassengerView ? 'Bilhete Digital' : (currentUser?.full_name || 'Agente')}</p>
+               <div className="flex flex-col mt-1">
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{isPassengerView ? 'Bilhete Digital' : (currentUser?.full_name || 'Agente')}</p>
+                   {!isPassengerView && selectedBooth && (
+                     <button 
+                       type="button"
+                       onClick={() => setShowBoothSelector(true)} 
+                       className="text-[9px] font-black text-slate-500 hover:text-yellow-500 uppercase tracking-widest mt-1 flex items-center gap-1.5 transition-colors self-start border border-slate-200 dark:border-zinc-850 bg-slate-50 dark:bg-zinc-800/30 px-2 py-0.5 rounded"
+                     >
+                       <span>Guichê: <span className="text-slate-850 dark:text-yellow-400 font-bold">{selectedBooth.name}</span></span>
+                       <span className="text-[8px] opacity-70 font-bold ml-1 flex items-center gap-0.5 text-blue-500 hover:text-yellow-500 font-sans tracking-normal">(ALTERAR)</span>
+                     </button>
+                   )}
+               </div>
            </div>
         </div>
         <div className="flex gap-3">
@@ -1066,7 +1217,13 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                   {activeView === 'venda' ? 'Histórico' : 'Nova Venda'}
               </button>
             )}
-            <button onClick={onExit} className="p-3 text-white/50 hover:text-red-500 transition-colors"><X size={28}/></button>
+            {isPassengerView ? (
+              <button onClick={onExit} className="px-6 py-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 dark:hover:bg-red-900/20 text-red-600 dark:text-red-450 border border-red-200 dark:border-red-900/40 rounded-2xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-sm">
+                Voltar ao Início
+              </button>
+            ) : (
+              <button onClick={onExit} className="p-3 text-slate-400 hover:text-red-500 dark:text-zinc-500 transition-colors"><X size={28}/></button>
+            )}
         </div>
       </div>
 
@@ -1802,7 +1959,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                                                {isVerifyingVt ? <Loader2 size={16} className="animate-spin" /> : 'Consultar'}
                                                            </button>
                                                        </div>
-                                                       <p className="mt-2 text-[8px] font-black uppercase text-blue-600/60 text-center italic">Consulte o CPF ou Matrícula para validar o benefício e descontar o saldo do cartão</p>
+                                                       <p className="mt-2 text-[8px] font-black uppercase text-blue-600/60 text-center italic">Consulte o CPF ou Matrícula para validar o benefício. O desconto no cartão será realizado apenas ao finalizar a venda.</p>
                                                    </div>
                                                )}
 
@@ -1875,20 +2032,20 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                    </div>
 
                                     {/* Quadro Composição de Preço (Step 5) - Aumentado conforme solicitado */}
-                                   <div className="mt-12 bg-white dark:bg-zinc-900 p-10 rounded-[4rem] border-8 border-yellow-400 shadow-2xl overflow-hidden relative group transition-all hover:scale-[1.01]">
-                                       <div className="absolute top-0 right-0 p-8 opacity-5">
+                                   <div className="mt-8 bg-white dark:bg-zinc-900 p-6 md:p-8 rounded-[3rem] border-4 border-yellow-400 shadow-xl overflow-hidden relative group transition-all hover:scale-[1.01]">
+                                       <div className="absolute top-0 right-0 p-4 opacity-0">
                                            <DollarSign size={120} className="text-yellow-400" />
                                        </div>
-                                       <h4 className="text-3xl font-black uppercase italic mb-10 dark:text-white flex items-center gap-4">
-                                           <div className="w-12 h-12 bg-yellow-400 text-slate-900 rounded-2xl flex items-center justify-center shadow-lg">
-                                               <DollarSign size={32} />
+                                       <h4 className="text-xl font-black uppercase italic mb-6 dark:text-white flex items-center gap-3">
+                                           <div className="w-10 h-10 bg-yellow-400 text-slate-900 rounded-xl flex items-center justify-center shadow-md">
+                                               <DollarSign size={24} />
                                            </div>
                                            Composição Detalhada do Preço
                                        </h4>
-                                       <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                           <div className="p-8 bg-slate-50 dark:bg-zinc-800 rounded-[2.5rem] border-2 border-slate-100 dark:border-zinc-700 shadow-inner">
-                                               <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Tarifa Base</p>
-                                               <p className="text-4xl font-black dark:text-white tracking-tighter">R$ {
+                                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                                           <div className="p-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 shadow-inner">
+                                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tarifa Base</p>
+                                               <p className="text-2xl font-black dark:text-white tracking-tighter">R$ {
                                                    (() => {
                                                        const toll = selectedRoute.toll || 0;
                                                        const boarding = selectedRoute.boarding_fee || 0;
@@ -1899,21 +2056,21 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                                        return (selectedRoute.price || 0).toFixed(2);
                                                    })()
                                                }</p>
-                                               <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase italic">Valor Líquido</p>
+                                               <p className="mt-1.5 text-[9px] font-bold text-slate-400 uppercase italic">Valor Líquido</p>
                                            </div>
-                                           <div className="p-8 bg-slate-50 dark:bg-zinc-800 rounded-[2.5rem] border-2 border-slate-100 dark:border-zinc-700 shadow-inner">
-                                               <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Pedágio</p>
-                                               <p className="text-4xl font-black dark:text-white tracking-tighter">R$ {(selectedRoute.toll || 0).toFixed(2)}</p>
-                                               <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase italic">Rateio Fixado</p>
+                                           <div className="p-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 shadow-inner">
+                                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Pedágio</p>
+                                               <p className="text-2xl font-black dark:text-white tracking-tighter">R$ {(selectedRoute.toll || 0).toFixed(2)}</p>
+                                               <p className="mt-1.5 text-[9px] font-bold text-slate-400 uppercase italic">Rateio Fixado</p>
                                            </div>
-                                           <div className="p-8 bg-slate-50 dark:bg-zinc-800 rounded-[2.5rem] border-2 border-slate-100 dark:border-zinc-700 shadow-inner">
-                                               <p className="text-[12px] font-black text-slate-400 uppercase tracking-widest mb-2">Taxas</p>
-                                               <p className="text-4xl font-black dark:text-white tracking-tighter">R$ {((selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0)).toFixed(2)}</p>
-                                               <p className="mt-2 text-[10px] font-bold text-slate-400 uppercase italic">Embarque e Encargos</p>
+                                           <div className="p-4 bg-slate-50 dark:bg-zinc-800 rounded-2xl border border-slate-200 dark:border-zinc-700 shadow-inner">
+                                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Taxas</p>
+                                               <p className="text-2xl font-black dark:text-white tracking-tighter">R$ {((selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0)).toFixed(2)}</p>
+                                               <p className="mt-1.5 text-[9px] font-bold text-slate-400 uppercase italic">Embarque e Encargos</p>
                                            </div>
-                                           <div className="p-8 bg-yellow-400 rounded-[2.5rem] border-4 border-slate-900 flex flex-col justify-center shadow-xl">
-                                               <p className="text-[12px] font-black text-slate-900 uppercase tracking-widest mb-2">Total Unitário</p>
-                                               <p className="text-5xl font-black text-slate-900 leading-none tracking-tighter italic">R$ {
+                                           <div className="p-4 bg-yellow-400 rounded-2xl border-2 border-slate-900 flex flex-col justify-center shadow-md">
+                                               <p className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-1">Total Unitário</p>
+                                               <p className="text-3xl font-black text-slate-900 leading-none tracking-tighter italic">R$ {
                                                    (selectedSection 
                                                        ? (selectedSection.price || 0) 
                                                        : ((selectedRoute.price || 0) + (selectedRoute.toll || 0) + (selectedRoute.boarding_fee || 0) + (selectedRoute.fees || 0))
