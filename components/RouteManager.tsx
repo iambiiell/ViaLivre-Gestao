@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { BusRoute, RouteStatus, Company, City, User, LedColor, RouteSection, TicketingConfig, Trip, TicketSale, BusStation } from '../types';
-import { Plus, Navigation, Trash2, X, Pencil, Save, Clock, ListChecks, Type, Search, LayoutGrid, Palette, Zap, Binary, Hash, ArrowRight, BarChart3, Users, DollarSign, Activity } from 'lucide-react';
+import { Plus, Navigation, Trash2, X, Pencil, Save, Clock, ListChecks, Type, Search, LayoutGrid, Palette, Zap, Binary, Hash, ArrowRight, BarChart3, Users, DollarSign, Activity, FileSpreadsheet } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { db } from '../services/database';
 
@@ -47,7 +47,8 @@ const initialForm: Partial<BusRoute> = {
   via3_cor: 'AMBAR',
   route_type: 'URBANO',
   payment_type: 'QUALQUER_UM',
-  payment_methods_accepted: ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO']
+  payment_methods_accepted: ['DINHEIRO', 'PIX', 'CREDITO', 'DEBITO'],
+  estimated_travel_time_text: ''
 };
 
 const RouteManager: React.FC<RouteManagerProps> = ({ 
@@ -69,6 +70,35 @@ const RouteManager: React.FC<RouteManagerProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedDirection, setSelectedDirection] = useState<'IDA' | 'VOLTA'>('IDA');
+  const [selectedScope, setSelectedScope] = useState<string>('');
+  const [showAllScopes, setShowAllScopes] = useState<boolean>(false);
+  const lastInteractionTimeRef = useRef<number>(Date.now());
+
+  useEffect(() => {
+    if (!isModalOpen || activeTab !== 'horario') return;
+
+    const interval = setInterval(() => {
+      // Check if 10 seconds have passed since the last interaction
+      if (Date.now() - lastInteractionTimeRef.current >= 10000) {
+        // Collect all available scope options
+        const availableScopes: string[] = ['']; // Rota integral represents empty string scope
+        if (formData.sections && formData.sections.length > 0) {
+          formData.sections.forEach(sec => {
+            availableScopes.push(sec.name);
+          });
+        }
+
+        if (availableScopes.length > 1) {
+          // Find the index of the currently selectedScope
+          const currentIndex = availableScopes.indexOf(selectedScope);
+          const nextIndex = (currentIndex + 1) % availableScopes.length;
+          setSelectedScope(availableScopes[nextIndex]);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isModalOpen, activeTab, selectedScope, formData.sections]);
   const [currentSignIdx, setCurrentSignIdx] = useState(0);
   const [newTimes, setNewTimes] = useState({ weekdays: '', saturday: '', sunday: '' });
   const [bulkInput, setBulkInput] = useState({ weekdays: '', saturday: '', sunday: '' });
@@ -87,12 +117,12 @@ const RouteManager: React.FC<RouteManagerProps> = ({
 
   const activeSigns = useMemo(() => {
     const items = [
-      { text: formData.letreiro_principal, modo: formData.letreiro_principal_modo, cor: formData.letreiro_principal_cor || 'AMBAR' },
-      { text: formData.via1, modo: formData.via1_modo, cor: formData.via1_cor || 'AMBAR' },
-      { text: formData.via2, modo: formData.via2_modo, cor: formData.via2_cor || 'AMBAR' },
-      { text: formData.via3, modo: formData.via3_modo, cor: formData.via3_cor || 'AMBAR' }
+      { text: formData.letreiro_principal || '', modo: formData.letreiro_principal_modo || 'FIXO', cor: 'BRANCO' },
+      { text: formData.via1 || '', modo: formData.via1_modo || 'FIXO', cor: 'BRANCO' },
+      { text: formData.via2 || '', modo: formData.via2_modo || 'FIXO', cor: 'BRANCO' },
+      { text: formData.via3 || '', modo: formData.via3_modo || 'FIXO', cor: 'BRANCO' }
     ].filter(s => s.text && s.text.trim() !== "");
-    return items.length > 0 ? items : [{ ...DEFAULT_SIGN_ITEM }];
+    return items.length > 0 ? items : [{ text: 'VIALIVRE GESTÃO', modo: 'FIXO' as const, cor: 'BRANCO' as const }];
   }, [formData]);
 
   useEffect(() => {
@@ -179,15 +209,72 @@ const RouteManager: React.FC<RouteManagerProps> = ({
     }
 
     const currentSchedule = [...(formData.schedule?.[dayType] || [])];
-    if (currentSchedule.some(t => t.time === formattedTime && t.direction === selectedDirection)) return;
+    if (currentSchedule.some(t => t.time === formattedTime && t.direction === selectedDirection && t.section_name === (selectedScope || undefined))) return;
 
     const newSchedule = {
       ...formData.schedule!,
-      [dayType]: [...currentSchedule, { time: formattedTime, direction: selectedDirection }]
+      [dayType]: [...currentSchedule, { time: formattedTime, direction: selectedDirection, section_name: selectedScope || undefined }]
     };
 
     setFormData(prev => ({ ...prev, schedule: newSchedule }));
     setNewTimes(prev => ({ ...prev, [dayType]: '' }));
+  };
+
+  const addBulkTimes = (dayType: 'weekdays' | 'saturday' | 'sunday') => {
+    const rawInput = bulkInput[dayType];
+    if (!rawInput) return;
+
+    const candidates = rawInput
+      .split(/[\s,;\n]+/)
+      .map(t => t.trim())
+      .filter(Boolean);
+
+    if (candidates.length === 0) {
+      addToast("Nenhum horário detectado na entrada em massa.", "warning");
+      return;
+    }
+
+    const currentSchedule = [...(formData.schedule?.[dayType] || [])];
+    const updatedList = [...currentSchedule];
+    let addedCount = 0;
+    let formatError = false;
+
+    candidates.forEach(time => {
+      let formattedTime = time;
+      if (/^\d:\d{2}$/.test(formattedTime)) {
+        formattedTime = `0${formattedTime}`;
+      }
+
+      if (/^([01]\d|2[0-3]):([0-5]\d)$/.test(formattedTime)) {
+        if (!updatedList.some(t => t.time === formattedTime && t.direction === selectedDirection && t.section_name === (selectedScope || undefined))) {
+          updatedList.push({
+            time: formattedTime,
+            direction: selectedDirection,
+            section_name: selectedScope || undefined
+          });
+          addedCount++;
+        }
+      } else {
+        formatError = true;
+      }
+    });
+
+    if (addedCount > 0) {
+      const newSchedule = {
+        ...formData.schedule!,
+        [dayType]: updatedList.sort((a, b) => a.time.localeCompare(b.time))
+      };
+      setFormData(prev => ({ ...prev, schedule: newSchedule }));
+      setBulkInput(prev => ({ ...prev, [dayType]: '' }));
+      setShowBulk(prev => ({ ...prev, [dayType]: false }));
+      addToast(`${addedCount} horário(s) adicionado(s) em massa!`, "success");
+    } else {
+      if (formatError) {
+        addToast("Formato inválido encontrado nos horários informados. Use HH:MM separados por espaço/vírgula.", "error");
+      } else {
+        addToast("Nenhum horário novo ou válido foi adicionado.", "warning");
+      }
+    }
   };
 
   const handleAddSection = () => {
@@ -212,11 +299,11 @@ const RouteManager: React.FC<RouteManagerProps> = ({
     if (nameInput) nameInput.value = '';
   };
 
-  const removeTime = (dayType: 'weekdays' | 'saturday' | 'sunday', time: string, direction: 'IDA' | 'VOLTA') => {
+  const removeTime = (dayType: 'weekdays' | 'saturday' | 'sunday', time: string, direction: 'IDA' | 'VOLTA', section_name?: string) => {
     const currentSchedule = formData.schedule?.[dayType] || [];
     const newSchedule = {
       ...formData.schedule!,
-      [dayType]: currentSchedule.filter(t => !(t.time === time && t.direction === direction))
+      [dayType]: currentSchedule.filter(t => !(t.time === time && t.direction === direction && t.section_name === section_name))
     };
     setFormData({ ...formData, schedule: newSchedule });
   };
@@ -233,6 +320,9 @@ const RouteManager: React.FC<RouteManagerProps> = ({
   };
 
   const handleOpenModal = (route?: BusRoute) => {
+    setSelectedScope('');
+    setShowAllScopes(false);
+    lastInteractionTimeRef.current = Date.now();
     if (route) {
         setEditingId(route.id);
         const data = { ...initialForm, ...route };
@@ -296,6 +386,11 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                 <div className="min-w-0 flex-1">
                   <h3 className="text-sm font-black dark:text-white uppercase italic leading-tight break-words">{route.origin} x {route.destination}</h3>
                   <p className="text-[8px] font-black text-slate-400 uppercase">{route.route_type}</p>
+                  {route.origin_station_platform && route.destination_station_platform && (
+                    <p className="text-[9px] font-bold text-yellow-600 dark:text-yellow-400 mt-1 uppercase">
+                      Plat: {route.origin_station_platform} ➔ {route.destination_station_platform}
+                    </p>
+                  )}
                 </div>
             </div>
             <div className="flex justify-between items-center pt-4 border-t dark:border-zinc-800 mt-auto">
@@ -425,60 +520,70 @@ const RouteManager: React.FC<RouteManagerProps> = ({
 
             <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1 bg-white dark:bg-zinc-950">
                 {activeTab === 'geral' && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
-                        <div className="col-span-full">
+                    <div className="space-y-6 animate-in fade-in">
+                        {/* primeira linha: Empresa Operadora */}
+                        <div className="w-full">
                             <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Empresa Operadora *</label>
                             <select className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" value={formData.company_id || ''} onChange={e => setFormData({...formData, company_id: e.target.value})}>
                                 <option value="">Selecione a empresa...</option>
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
                         </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Cód. Linha *</label>
-                            <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.prefixo_linha || ''} onChange={e => setFormData({...formData, prefixo_linha: e.target.value})} placeholder="501" />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tipo de Estrada/Serviço *</label>
-                            <select 
-                                className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
-                                value={formData.route_type || 'URBANO'} 
-                                onChange={e => setFormData({
-                                    ...formData, 
-                                    route_type: e.target.value as any,
-                                    origin_station_id: undefined,
-                                    origin_station_platform: undefined,
-                                    destination_station_id: undefined,
-                                    destination_station_platform: undefined
-                                })}
-                            >
-                                <option value="URBANO">Urbano / Municipal</option>
-                                <option value="RODOVIARIA">Rodoviário</option>
-                                <option value="INTERMUNICIPAL">Intermunicipal / Linha</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Ponto de Origem *</label>
-                            <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.origin || ''} onChange={e => setFormData({...formData, origin: e.target.value})} placeholder="ORIGEM" />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Ponto de Destino *</label>
-                            <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.destination || ''} onChange={e => setFormData({...formData, destination: e.target.value})} placeholder="DESTINO" />
+
+                        {/* segunda linha: Cód. Linha, Tipo de Estrada/Serviço e Tempo de Viagem */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Cód. Linha *</label>
+                                <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.prefixo_linha || ''} onChange={e => setFormData({...formData, prefixo_linha: e.target.value})} placeholder="501" />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tipo de Estrada/Serviço *</label>
+                                <select 
+                                    className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
+                                    value={formData.route_type || 'URBANO'} 
+                                    onChange={e => setFormData({
+                                        ...formData, 
+                                        route_type: e.target.value as any,
+                                        origin_station_id: undefined,
+                                        origin_station_platform: undefined,
+                                        destination_station_id: undefined,
+                                        destination_station_platform: undefined
+                                    })}
+                                >
+                                    <option value="URBANO">Urbano / Municipal</option>
+                                    <option value="RODOVIARIA">Rodoviário</option>
+                                    <option value="INTERMUNICIPAL">Intermunicipal / Linha</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tempo de Viagem</label>
+                                <input 
+                                    className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 pointer-events-auto" 
+                                    value={formData.estimated_travel_time_text || ''} 
+                                    onChange={e => setFormData({...formData, estimated_travel_time_text: e.target.value})} 
+                                    placeholder="Ex: 1h 30m ou 45 min" 
+                                />
+                            </div>
                         </div>
 
-                        {(formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL') && (
-                          <>
-                            <div className="col-span-1">
-                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Rodoviária de Origem *</label>
+                        {/* terceira linha: Ponto de Origem, Rodoviária de Origem e Plataforma Origem */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Ponto de Origem *</label>
+                                <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.origin || ''} onChange={e => setFormData({...formData, origin: e.target.value})} placeholder="ORIGEM" />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">
+                                  Rodoviária de Origem {formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL' ? '*' : '(Opcional)'}
+                                </label>
                                 <select 
                                     className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
                                     value={formData.origin_station_id || ''} 
                                     onChange={e => {
                                         const statId = e.target.value;
-                                        const stat = busStations.find(x => x.id === statId);
                                         setFormData({
                                             ...formData, 
                                             origin_station_id: statId,
-                                            origin: stat ? stat.name : (formData.origin || ''),
                                             origin_station_platform: ''
                                         });
                                     }}
@@ -487,8 +592,10 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                     {busStations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                             </div>
-                            <div className="col-span-1">
-                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Plataforma Origem *</label>
+                            <div>
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">
+                                  Plataforma Origem {formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL' ? '*' : '(Opcional)'}
+                                </label>
                                 <select 
                                     className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white pb-3" 
                                     value={formData.origin_station_platform || ''} 
@@ -499,21 +606,29 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                       .split(',')
                                       .map(p => p.trim())
                                       .filter(Boolean)
-                                      .map(p => <option key={p} value={p}>{p}</option>)}
+                                      .map((p, idx) => <option key={`origin-platform-${p}-${idx}`} value={p}>{p}</option>)}
                                 </select>
                             </div>
-                            <div className="col-span-1">
-                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Rodoviária de Destino *</label>
+                        </div>
+
+                        {/* quarta linha: Ponto de Destino, Rodoviária de Destino e Plataforma Destino */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Ponto de Destino *</label>
+                                <input className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formData.destination || ''} onChange={e => setFormData({...formData, destination: e.target.value})} placeholder="DESTINO" />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">
+                                  Rodoviária de Destino {formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL' ? '*' : '(Opcional)'}
+                                </label>
                                 <select 
                                     className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white" 
                                     value={formData.destination_station_id || ''} 
                                     onChange={e => {
                                         const statId = e.target.value;
-                                        const stat = busStations.find(x => x.id === statId);
                                         setFormData({
                                             ...formData, 
                                             destination_station_id: statId,
-                                            destination: stat ? stat.name : (formData.destination || ''),
                                             destination_station_platform: ''
                                         });
                                     }}
@@ -522,8 +637,10 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                     {busStations.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                             </div>
-                            <div className="col-span-1">
-                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">Plataforma Destino *</label>
+                            <div>
+                                <label className="block text-[10px] font-black text-yellow-500 uppercase mb-1 ml-2">
+                                  Plataforma Destino {formData.route_type === 'RODOVIARIA' || formData.route_type === 'INTERMUNICIPAL' ? '*' : '(Opcional)'}
+                                </label>
                                 <select 
                                     className="w-full px-5 py-4 border-2 border-yellow-500 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-white pb-3" 
                                     value={formData.destination_station_platform || ''} 
@@ -534,36 +651,136 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                       .split(',')
                                       .map(p => p.trim())
                                       .filter(Boolean)
-                                      .map(p => <option key={p} value={p}>{p}</option>)}
+                                      .map((p, idx) => <option key={`dest-platform-${p}-${idx}`} value={p}>{p}</option>)}
                                 </select>
                             </div>
-                          </>
-                        )}
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tarifa Base R$ *</label>
-                            <input type="text" className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.price)} onChange={e => handleCurrencyChange(e.target.value, 'price')} />
                         </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Pedágio R$</label>
-                            <input type="text" className="w-full px-5 py-4 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.toll)} onChange={e => handleCurrencyChange(e.target.value, 'toll')} />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Taxa Embarque R$</label>
-                            <input type="text" className="w-full px-5 py-4 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.boarding_fee)} onChange={e => handleCurrencyChange(e.target.value, 'boarding_fee')} />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Outras Taxas R$</label>
-                            <input type="text" className="w-full px-5 py-4 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.fees)} onChange={e => handleCurrencyChange(e.target.value, 'fees')} />
+
+                        {/* última linha: Tarifa Base, Pedágio, Taxa de Embarque e Tarifa Final */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Tarifa Base R$ *</label>
+                                <input type="text" className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.price)} onChange={e => handleCurrencyChange(e.target.value, 'price')} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Pedágio R$</label>
+                                <input type="text" className="w-full px-5 py-4 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.toll)} onChange={e => handleCurrencyChange(e.target.value, 'toll')} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-black dark:text-white uppercase mb-1 ml-2">Taxa de Embarque R$</label>
+                                <input type="text" className="w-full px-5 py-4 border-2 border-slate-100 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100" value={formatCurrencyValue(formData.boarding_fee)} onChange={e => handleCurrencyChange(e.target.value, 'boarding_fee')} />
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Tarifa Final R$</label>
+                                <div className="w-full px-5 py-4 border-2 border-emerald-400 dark:border-emerald-600 rounded-2xl font-black bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400">
+                                    {formatCurrencyValue((formData.price || 0) + (formData.toll || 0) + (formData.boarding_fee || 0) + (formData.fees || 0))}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 )}
 
                 {activeTab === 'horario' && (
                     <div className="space-y-8 animate-in fade-in">
+                        {/* Seletor de Escopo do Horário */}
+                        <div className="bg-amber-50 dark:bg-zinc-900/50 p-6 rounded-[2rem] border-2 border-yellow-400 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <div>
+                                <h4 className="text-sm font-black uppercase text-slate-800 dark:text-zinc-100">Escopo da Grade Horária</h4>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">Selecione se o horário adicionado refere-se à Rota Integral ou a uma Seção cadastrada</p>
+                            </div>
+                            <div className="flex items-center gap-3 w-full md:w-auto">
+                                {!showAllScopes ? (
+                                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+                                        {/* Escopo Selecionado com Destaque e Listado Solitariamente */}
+                                        <div className="px-6 py-4 bg-yellow-450 dark:bg-yellow-400 text-slate-950 font-black text-xs uppercase rounded-2xl shadow-xl flex items-center gap-3 border-4 border-slate-900 dark:border-black animate-pulse">
+                                            <span className="text-lg">🎯</span>
+                                            <div className="flex flex-col text-left">
+                                                <span className="text-[8px] font-black tracking-widest text-slate-800 dark:text-mate-900 uppercase">Escopo Ativo</span>
+                                                <span className="text-[11px] font-extrabold uppercase italic">
+                                                    {selectedScope === '' 
+                                                        ? 'Rota Integral' 
+                                                        : `Seção: ${selectedScope}`
+                                                    }
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            type="button"
+                                            onClick={() => {
+                                                setShowAllScopes(true);
+                                                lastInteractionTimeRef.current = Date.now();
+                                            }}
+                                            className="px-5 py-3.5 bg-indigo-600 hover:bg-slate-900 dark:hover:bg-zinc-800 text-white font-black text-[10px] uppercase rounded-2xl shadow-md border-2 border-slate-950 transition-all flex items-center justify-center gap-1 shrink-0"
+                                        >
+                                            🔄 Alterar Escopo
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col space-y-2 w-full sm:w-auto">
+                                        <p className="text-[9px] font-black text-indigo-500 uppercase italic mb-1">Escolha o novo escopo:</p>
+                                        <div className="flex flex-wrap bg-white dark:bg-zinc-800 p-2 border-2 border-slate-200 dark:border-zinc-700 rounded-3xl gap-2">
+                                            <button 
+                                                onClick={() => {
+                                                    setSelectedScope('');
+                                                    setShowAllScopes(false);
+                                                    lastInteractionTimeRef.current = Date.now();
+                                                }}
+                                                className={`px-5 py-3.5 rounded-2xl font-black text-[10px] uppercase transition-all flex items-center gap-2 ${selectedScope === '' ? 'bg-yellow-400 text-slate-900 border-2 border-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-750 dark:hover:text-zinc-200'}`}
+                                            >
+                                                <span>Rota Integral</span>
+                                                {selectedScope === '' && <span>✓</span>}
+                                            </button>
+                                            {formData.sections && formData.sections.length > 0 && formData.sections.map((sec, idx) => {
+                                                const secNumber = (idx + 1).toString().padStart(2, '0');
+                                                const isCurrent = selectedScope === sec.name;
+                                                return (
+                                                    <button 
+                                                        key={`scope-${sec.name}-${idx}`}
+                                                        onClick={() => {
+                                                            setSelectedScope(sec.name);
+                                                            setShowAllScopes(false);
+                                                            lastInteractionTimeRef.current = Date.now();
+                                                        }}
+                                                        className={`px-5 py-3.5 rounded-2xl font-black text-[10px] uppercase transition-all truncate max-w-[200px] flex items-center gap-2 ${isCurrent ? 'bg-yellow-400 text-slate-900 border-2 border-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-750'}`}
+                                                        title={`Seção ${secNumber}: ${sec.name}`}
+                                                    >
+                                                        <span>Seção {secNumber}: {sec.name}</span>
+                                                        {isCurrent && <span>✓</span>}
+                                                    </button>
+                                                );
+                                            })}
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    setShowAllScopes(false);
+                                                    lastInteractionTimeRef.current = Date.now();
+                                                }}
+                                                className="px-4 py-3 bg-red-100 hover:bg-red-550 text-red-650 hover:text-white rounded-2xl font-black text-[9px] uppercase transition-all"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         {['weekdays', 'saturday', 'sunday'].map(dayId => (
                             <div key={dayId} className="bg-slate-50 dark:bg-zinc-900 rounded-[2.5rem] p-8 border-2 border-slate-200 dark:border-zinc-800">
                                 <div className="flex justify-between items-center mb-6">
-                                    <h4 className="text-xl font-black text-indigo-500 uppercase">{dayId === 'weekdays' ? 'Dias Úteis' : dayId === 'saturday' ? 'Sábados' : 'Domingos'}</h4>
+                                    <div className="flex items-center gap-3">
+                                        <h4 className="text-xl font-black text-indigo-500 uppercase">{dayId === 'weekdays' ? 'Dias Úteis' : dayId === 'saturday' ? 'Sábados' : 'Domingos'}</h4>
+                                        {(() => {
+                                            const totalCount = ((formData.schedule?.[dayId as keyof typeof formData.schedule] as any[]) || [])
+                                                .filter(t => t.direction === selectedDirection && (t.section_name || '') === (selectedScope || ''))
+                                                .length;
+                                            return (
+                                                <span className="px-3 py-1 bg-yellow-400 text-slate-900 border-2 border-slate-950 dark:border-zinc-800 font-extrabold text-[10px] rounded-full uppercase shadow-sm">
+                                                    {totalCount} horário{totalCount !== 1 ? 's' : ''}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                     <div className="flex items-center gap-2">
                                         <select 
                                             className="px-3 py-4 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl font-black text-[10px] dark:text-white"
@@ -579,18 +796,68 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                             value={newTimes[dayId as keyof typeof newTimes]}
                                             onChange={e => setNewTimes(prev => ({ ...prev, [dayId]: e.target.value }))}
                                         />
-                                        <button onClick={() => addTime(dayId as any)} className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg"><Plus size={16}/></button>
+                                        <button onClick={() => addTime(dayId as any)} className="p-3 bg-indigo-600 text-white rounded-xl shadow-lg" title="Adicionar Horário Único"><Plus size={16}/></button>
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setShowBulk(prev => ({ ...prev, [dayId]: !prev[dayId] }))} 
+                                            className={`p-3 rounded-xl shadow-lg transition-all ${showBulk[dayId as keyof typeof showBulk] ? 'bg-yellow-400 text-slate-900 border-2 border-slate-950' : 'bg-slate-200 hover:bg-slate-300 dark:bg-zinc-700 dark:text-zinc-300 text-slate-700'}`}
+                                            title="Importação em Massa"
+                                        >
+                                            <FileSpreadsheet size={16}/>
+                                        </button>
                                     </div>
                                 </div>
+
+                                {showBulk[dayId as keyof typeof showBulk] && (
+                                    <div className="mb-6 p-5 bg-white dark:bg-zinc-800 border-2 border-dashed border-yellow-400 rounded-3xl animate-in fade-in zoom-in-95">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <label className="text-[11px] font-black uppercase text-indigo-500 tracking-wider">Importação Rápida em Massa ({selectedScope ? `Seção: ${selectedScope}` : 'Rota Integral'})</label>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => setShowBulk(prev => ({ ...prev, [dayId]: false }))} 
+                                                className="text-[9px] font-black text-red-500 uppercase hover:underline"
+                                            >
+                                                Fechar
+                                            </button>
+                                        </div>
+                                        <p className="text-[9px] text-slate-400 dark:text-zinc-500 uppercase font-bold mb-3">Insira horários separados por espaço, vírgula ou quebra de linha. Exemplo: 06:15, 07:30, 08:45, 10:00</p>
+                                        <div className="flex gap-3">
+                                            <textarea 
+                                                rows={2}
+                                                className="flex-1 px-4 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl font-black text-[11px] dark:text-white uppercase placeholder-slate-300 focus:border-yellow-400 outline-none transition-all resize-none"
+                                                placeholder="Ex: 06:00, 08:30, 12:15, 15:45, 20:00"
+                                                value={bulkInput[dayId as keyof typeof bulkInput]}
+                                                onChange={e => setBulkInput(prev => ({ ...prev, [dayId]: e.target.value }))}
+                                            />
+                                            <button 
+                                                type="button"
+                                                onClick={() => addBulkTimes(dayId as any)}
+                                                className="px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-black uppercase text-[10px] tracking-wider shadow-lg transition-all self-end"
+                                            >
+                                                Importar
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex flex-wrap gap-3">
                                     {(formData.schedule?.[dayId as keyof typeof formData.schedule] || [])
-                                      .filter(t => t.direction === selectedDirection)
-                                      .map(item => (
-                                        <div key={item.time} className="px-5 py-3 bg-white dark:bg-zinc-800 rounded-xl border-2 shadow-sm flex items-center gap-3">
-                                            <span className="text-xl font-black font-mono dark:text-zinc-100">{item.time}</span>
-                                            <button onClick={() => removeTime(dayId as any, item.time, item.direction)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                      .filter(t => t.direction === selectedDirection && (t.section_name || '') === (selectedScope || ''))
+                                      .map((item, idx) => (
+                                        <div key={idx} className="px-5 py-3 bg-white dark:bg-zinc-800 rounded-xl border-2 shadow-sm flex flex-col min-w-[120px] justify-between transition-all hover:border-yellow-400">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <span className="text-xl font-black font-mono dark:text-zinc-100">{item.time}</span>
+                                                <button onClick={() => removeTime(dayId as any, item.time, item.direction, item.section_name)} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                            </div>
+                                            <span className={`text-[8px] font-black uppercase mt-1 ${item.section_name ? 'text-indigo-500' : 'text-slate-400'}`}>
+                                                {item.section_name ? `Seção: ${item.section_name}` : 'Rota Integral'}
+                                            </span>
                                         </div>
                                     ))}
+                                    {(formData.schedule?.[dayId as keyof typeof formData.schedule] || [])
+                                      .filter(t => t.direction === selectedDirection && (t.section_name || '') === (selectedScope || '')).length === 0 && (
+                                        <p className="text-[10px] font-black text-slate-400 uppercase italic py-2">Nenhum horário cadastrado para {selectedScope ? `seção "${selectedScope}"` : 'rota integral'} nesta direção.</p>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -657,9 +924,9 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <div className="text-right">
-                                                <p className="text-[8px] font-black text-slate-400 uppercase">Preço Final Seção</p>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[8px] text-slate-400">R$</span>
+                                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Preço Final Seção</p>
+                                                <div className="flex items-center gap-2 mt-1.5">
+                                                    <span className="text-sm font-black text-slate-400">R$</span>
                                                     <input 
                                                         type="number"
                                                         step="0.01"
@@ -669,10 +936,10 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                                             newSections[idx] = { ...section, price: parseFloat(e.target.value) || 0 };
                                                             setFormData({ ...formData, sections: newSections });
                                                         }}
-                                                        className="w-20 text-right bg-transparent font-black text-emerald-600 outline-none border-b border-transparent focus:border-emerald-600"
+                                                        className="w-32 px-4 py-2 text-right font-black text-lg text-emerald-600 dark:text-emerald-400 bg-slate-50 dark:bg-zinc-850 border-2 border-emerald-400 dark:border-emerald-600 hover:border-emerald-500 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm transition-all"
                                                     />
                                                 </div>
-                                                <p className="text-[7px] font-black text-blue-600 uppercase mt-1">
+                                                <p className="text-[7px] font-black text-indigo-500 uppercase mt-1">
                                                     Equiv. Base: R$ {Math.max(0, (section.price || 0) - (formData.toll || 0) - (formData.boarding_fee || 0) - (formData.fees || 0)).toFixed(2)}
                                                 </p>
                                             </div>
@@ -697,27 +964,97 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                 {activeTab === 'letreiro' && (
                     <div className="space-y-8 animate-in fade-in">
                         {/* Digital Sign Preview */}
-                        <div className="bg-slate-950 p-12 rounded-[3.5rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden group">
+                        <div className="bg-slate-950 p-6 md:p-8 rounded-[3.5rem] border-8 border-slate-800 shadow-2xl relative overflow-hidden group">
                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,0,0,0)_0%,rgba(0,0,0,0.4)_100%)] pointer-events-none"></div>
-                           <div className="relative z-10 flex flex-col items-center justify-center min-h-[140px] text-center">
-                               <AnimatePresence mode="wait">
-                                   <div 
-                                      key={currentSignIdx}
-                                      className={`text-5xl font-black uppercase italic tracking-tighter transition-all duration-700 ${getLedColorClass(activeSigns[currentSignIdx % activeSigns.length].cor)}`}
-                                      style={{ textShadow: '0 0 20px currentColor' }}
-                                   >
-                                       {activeSigns[currentSignIdx % activeSigns.length].text}
+                           
+                           {/* Style tag for marquee animation */}
+                           <style dangerouslySetInnerHTML={{__html: `
+                             @keyframes letreiro-marquee {
+                               0% { transform: translateX(100%); }
+                               100% { transform: translateX(-100%); }
+                             }
+                             .letreiro-rolante {
+                               display: inline-block;
+                               white-space: nowrap;
+                               animation: letreiro-marquee 10s linear infinite;
+                             }
+                           `}} />
+
+                           <div className="relative z-10 flex flex-row items-center min-h-[140px] w-full font-pixel gap-4">
+                               {/* Cód. Linha Block on the left side */}
+                               {formData.exibir_codigo_letreiro && formData.prefixo_linha && (
+                                   <div className="flex-shrink-0 flex items-center justify-center px-4 py-4 md:px-6 md:py-6 border-r-4 border-dashed border-slate-800 max-h-[120px] bg-slate-900 rounded-2xl select-none">
+                                       <span 
+                                           className="text-5xl md:text-6xl font-normal tracking-wider text-yellow-400 font-pixel"
+                                           style={{ textShadow: '0 0 16px #facc15' }}
+                                       >
+                                           {formData.prefixo_linha}
+                                       </span>
                                    </div>
-                               </AnimatePresence>
-                               <div className="mt-6 flex gap-2">
-                                   {activeSigns.map((_, i) => (
-                                       <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === (currentSignIdx % activeSigns.length) ? 'w-8 bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]' : 'w-2 bg-slate-800'}`}></div>
-                                   ))}
+                               )}
+                               
+                               {/* Rest of space for Destination slides */}
+                               <div className="flex-1 overflow-hidden relative flex items-center justify-start min-h-[120px] w-full">
+                                   <AnimatePresence mode="wait">
+                                       <div 
+                                          key={currentSignIdx}
+                                          className="w-full flex items-center justify-start font-pixel text-yellow-400"
+                                       >
+                                          {activeSigns[currentSignIdx % activeSigns.length].modo === 'ROLANTE' ? (
+                                              <div className="w-full overflow-hidden text-left py-2">
+                                                  <span 
+                                                     className="letreiro-rolante text-6xl sm:text-7xl md:text-8xl font-bold uppercase tracking-wider text-yellow-400 font-pixel"
+                                                     style={{ textShadow: '0 0 20px #facc15' }}
+                                                  >
+                                                      {activeSigns[currentSignIdx % activeSigns.length].text}
+                                                  </span>
+                                              </div>
+                                          ) : (
+                                              <span 
+                                                 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold uppercase tracking-wider text-yellow-400 font-pixel text-left text-ellipsis overflow-hidden px-2"
+                                                 style={{ textShadow: '0 0 20px #facc15' }}
+                                              >
+                                                  {activeSigns[currentSignIdx % activeSigns.length].text}
+                                              </span>
+                                          )}
+                                       </div>
+                                   </AnimatePresence>
                                </div>
                            </div>
+                           
+                           <div className="mt-2 flex gap-2 justify-center">
+                               {activeSigns.map((_, i) => (
+                                   <div key={i} className={`h-1.5 rounded-full transition-all duration-300 ${i === (currentSignIdx % activeSigns.length) ? 'w-8 bg-slate-100 shadow-[0_0_10px_rgba(241,245,249,0.8)]' : 'w-2 bg-slate-800'}`}></div>
+                               ))}
+                           </div>
+                           
                            <div className="absolute bottom-4 right-8 text-[8px] font-black text-slate-700 uppercase tracking-widest flex items-center gap-2">
                                <Zap size={10} /> Digital Signage Pro
                            </div>
+                        </div>
+
+                        {/* Controles do Preview do Painel */}
+                        <div className="bg-slate-50 dark:bg-zinc-900 border-2 border-slate-100 dark:border-zinc-800 p-6 rounded-[2.5rem] flex flex-col md:flex-row justify-between items-center gap-6">
+                            <div className="flex flex-col justify-center">
+                                <label className="text-xs font-black uppercase dark:text-white">Exibir Cód. Linha no Letreiro</label>
+                                <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold">Insere o código '{formData.prefixo_linha || 'N/A'}' no letreiro digital da rota</p>
+                            </div>
+                            <div className="mt-3 md:mt-0 flex gap-2">
+                                <button 
+                                    type="button"
+                                    onClick={() => setFormData({...formData, exibir_codigo_letreiro: true})}
+                                    className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${formData.exibir_codigo_letreiro ? 'bg-yellow-400 text-slate-900 shadow-md border-2 border-slate-900' : 'bg-white dark:bg-zinc-800 text-slate-400 border border-slate-200'}`}
+                                >
+                                    Exibir Código
+                                </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => setFormData({...formData, exibir_codigo_letreiro: false})}
+                                    className={`px-6 py-3 rounded-xl font-black text-[10px] uppercase transition-all ${!formData.exibir_codigo_letreiro ? 'bg-yellow-400 text-slate-900 shadow-md border-2 border-slate-900' : 'bg-white dark:bg-zinc-800 text-slate-400 border border-slate-200'}`}
+                                >
+                                    Não Exibir
+                                </button>
+                            </div>
                         </div>
 
                         {/* Sign Configuration */}
@@ -727,7 +1064,7 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                    <Type size={18} className="text-yellow-500" /> Letreiro Principal
                                 </h4>
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                                    <div className="lg:col-span-6">
+                                    <div className="lg:col-span-9">
                                         <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Mensagem Principal</label>
                                         <input 
                                             className="w-full px-5 py-4 border-2 border-yellow-400 rounded-2xl font-bold bg-white dark:bg-zinc-800 dark:text-zinc-100" 
@@ -742,19 +1079,6 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                             <option value="FIXO">FIXO</option>
                                             <option value="ROLANTE">ROLANTE</option>
                                         </select>
-                                    </div>
-                                    <div className="lg:col-span-3">
-                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-2">Cor LED</label>
-                                        <div className="flex gap-2 p-1 bg-white dark:bg-zinc-800 border-2 border-slate-200 dark:border-zinc-700 rounded-2xl">
-                                            {(['AMBAR', 'BRANCO', 'VERDE'] as LedColor[]).map(c => (
-                                                <button 
-                                                    key={c}
-                                                    onClick={() => setFormData({...formData, letreiro_principal_cor: c})}
-                                                    className={`flex-1 h-10 rounded-xl transition-all border-2 ${formData.letreiro_principal_cor === c ? 'border-yellow-400 scale-105' : 'border-transparent'}`}
-                                                    style={{ backgroundColor: c === 'AMBAR' ? '#f59e0b' : c === 'BRANCO' ? '#f8fafc' : '#10b981' }}
-                                                />
-                                            ))}
-                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -771,21 +1095,11 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                             onChange={e => setFormData({...formData, [`via${i}`]: e.target.value.toUpperCase()})}
                                             placeholder={`FRASE VIA ${i}`}
                                         />
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <select className="px-5 py-3 border-2 border-slate-100 dark:border-zinc-700 rounded-xl font-bold bg-white dark:bg-zinc-800 dark:text-zinc-100 text-[10px]" value={(formData as any)[`via${i}_modo`]} onChange={e => setFormData({...formData, [`via${i}_modo`]: e.target.value})}>
+                                        <div className="flex flex-col gap-2">
+                                            <select className="w-full px-5 py-3 border-2 border-slate-100 dark:border-zinc-700 rounded-xl font-bold bg-white dark:bg-zinc-800 dark:text-zinc-100 text-[10px]" value={(formData as any)[`via${i}_modo`]} onChange={e => setFormData({...formData, [`via${i}_modo`]: e.target.value})}>
                                                 <option value="FIXO">FIXO</option>
                                                 <option value="ROLANTE">ROLANTE</option>
                                             </select>
-                                            <div className="flex gap-1">
-                                                {(['AMBAR', 'BRANCO', 'VERDE'] as LedColor[]).map(c => (
-                                                    <button 
-                                                        key={c}
-                                                        onClick={() => setFormData({...formData, [`via${i}_cor`]: c})}
-                                                        className={`flex-1 h-full min-h-[36px] rounded-lg border-2 ${(formData as any)[`via${i}_cor`] === c ? 'border-yellow-400' : 'border-transparent'}`}
-                                                        style={{ backgroundColor: c === 'AMBAR' ? '#f59e0b' : c === 'BRANCO' ? '#f8fafc' : '#10b981' }}
-                                                    />
-                                                ))}
-                                            </div>
                                         </div>
                                     </div>
                                 </div>

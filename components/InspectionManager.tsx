@@ -9,14 +9,16 @@ interface InspectionManagerProps {
   vehicles: Vehicle[];
   currentUser: User | null;
   onAddInspection: (inspection: Inspection) => void;
+  onUpdateInspection?: (inspection: Inspection) => void;
   onDeleteInspection: (id: string) => void;
   addToast: (message: string, type?: 'success' | 'error' | 'warning') => void;
 }
 
-const InspectionManager: React.FC<InspectionManagerProps> = ({ inspections = [], vehicles = [], currentUser, onAddInspection, onDeleteInspection, addToast }) => {
+const InspectionManager: React.FC<InspectionManagerProps> = ({ inspections = [], vehicles = [], currentUser, onAddInspection, onUpdateInspection, onDeleteInspection, addToast }) => {
   const [activeTab, setActiveTab] = useState<'inspections' | 'guides'>('inspections');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [driverGuides, setDriverGuides] = useState<DriverLog[]>([]);
   const [isLoadingGuides, setIsLoadingGuides] = useState(false);
@@ -57,29 +59,79 @@ const InspectionManager: React.FC<InspectionManagerProps> = ({ inspections = [],
     );
   }, [driverGuides, searchTerm]);
 
+  const handleOpenCreateModal = () => {
+    setFormData({
+      status: 'APROVADO',
+      location: '',
+      agency: '',
+      checklist: { pneus: true, freios: true, luzes: true, limpeza: true, documentos: true, ar_condicionado: true },
+      date: new Date().toISOString().split('T')[0],
+      notes: ''
+    });
+    setEditingId(null);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEditModal = (insp: Inspection) => {
+    setFormData({
+      vehicle_id: insp.vehicle_id,
+      status: insp.status,
+      location: insp.location,
+      agency: insp.agency,
+      checklist: insp.checklist || { pneus: true, freios: true, luzes: true, limpeza: true, documentos: true, ar_condicionado: true },
+      date: insp.date,
+      notes: insp.notes?.replace(/\[Vistoria: .*?\]/, '').trim() || ''
+    });
+    setEditingId(insp.id);
+    setIsModalOpen(true);
+  };
+
   const handleSave = () => {
     if (!formData.vehicle_id || !formData.location || !formData.agency) {
       addToast("Preencha todos os campos obrigatórios.", "error");
       return;
     }
 
-    // Mapping Inspection to DriverLog format for the driver_logs table
-    const inspectionPayload = {
-      ...formData,
-      id: `insp-${Date.now()}`,
-      driver_id: currentUser?.id || 'sys', // Using driver_id as the inspector
-      created_at: new Date().toISOString(),
-      damage_reported: formData.status === 'REPROVADO',
-      notes: `${formData.notes || ''} [Vistoria: ${formData.agency} em ${formData.location}]`.trim(),
-      tire_condition_ok: formData.checklist?.pneus,
-      lights_condition_ok: formData.checklist?.luzes,
-      internal_cleaning_ok: formData.checklist?.limpeza,
-      documents_ok: formData.checklist?.documentos,
-      // Add other fields if necessary
-    };
+    if (editingId) {
+      const inspectionPayload = {
+        ...formData,
+        id: editingId,
+        driver_id: currentUser?.id || 'sys',
+        updated_at: new Date().toISOString(),
+        damage_reported: formData.status === 'REPROVADO',
+        notes: `${formData.notes || ''} [Vistoria: ${formData.agency} em ${formData.location}]`.trim(),
+        tire_condition_ok: formData.checklist?.pneus,
+        lights_condition_ok: formData.checklist?.luzes,
+        internal_cleaning_ok: formData.checklist?.limpeza,
+        documents_ok: formData.checklist?.documentos,
+      };
+      
+      if (onUpdateInspection) {
+        onUpdateInspection(inspectionPayload as any);
+        addToast("Vistoria atualizada com sucesso!", "success");
+      } else {
+        onAddInspection(inspectionPayload as any);
+        addToast("Vistoria atualizada com sucesso!", "success");
+      }
+    } else {
+      const inspectionPayload = {
+        ...formData,
+        id: `insp-${Date.now()}`,
+        driver_id: currentUser?.id || 'sys',
+        created_at: new Date().toISOString(),
+        damage_reported: formData.status === 'REPROVADO',
+        notes: `${formData.notes || ''} [Vistoria: ${formData.agency} em ${formData.location}]`.trim(),
+        tire_condition_ok: formData.checklist?.pneus,
+        lights_condition_ok: formData.checklist?.luzes,
+        internal_cleaning_ok: formData.checklist?.limpeza,
+        documents_ok: formData.checklist?.documentos,
+      };
 
-    onAddInspection(inspectionPayload as any);
+      onAddInspection(inspectionPayload as any);
+      addToast("Vistoria gravada com sucesso!", "success");
+    }
     setIsModalOpen(false);
+    setEditingId(null);
   };
 
   return (
@@ -99,7 +151,7 @@ const InspectionManager: React.FC<InspectionManagerProps> = ({ inspections = [],
             </div>
         </div>
         {activeTab === 'inspections' && (
-            <button onClick={() => setIsModalOpen(true)} className="bg-slate-900 text-white dark:bg-yellow-400 dark:text-slate-900 px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><Plus size={18} /> Nova Vistoria</button>
+            <button onClick={handleOpenCreateModal} className="bg-slate-900 text-white dark:bg-yellow-400 dark:text-slate-900 px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 shadow-xl hover:scale-105 transition-all"><Plus size={18} /> Nova Vistoria</button>
         )}
       </div>
 
@@ -145,12 +197,20 @@ const InspectionManager: React.FC<InspectionManagerProps> = ({ inspections = [],
                             </button>
                           </div>
                         ) : (
-                          <button 
-                            onClick={() => setDeletingId(insp.id)} 
-                            className="w-full py-2 text-red-400 hover:text-red-600 text-[10px] font-black uppercase border-t dark:border-zinc-800 mt-2 transition-colors"
-                          >
-                            Remover Registro
-                          </button>
+                          <div className="flex gap-2 border-t dark:border-zinc-800 mt-2 pt-2">
+                            <button 
+                              onClick={() => handleOpenEditModal(insp)} 
+                              className="flex-[2] py-2 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 text-[9px] font-black uppercase rounded-xl transition-all active:scale-95"
+                            >
+                              Editar Vistoria
+                            </button>
+                            <button 
+                              onClick={() => setDeletingId(insp.id)} 
+                              className="flex-1 py-1.5 text-red-400 hover:text-red-600 text-[9px] font-black uppercase transition-colors"
+                            >
+                              Remover
+                            </button>
+                          </div>
                         )}
                     </div>
                 )

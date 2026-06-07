@@ -104,9 +104,9 @@ export interface BusRoute {
   sections?: RouteSection[];
   stops: string[];
   schedule: {
-    weekdays: { time: string; direction: 'IDA' | 'VOLTA' }[];
-    saturday: { time: string; direction: 'IDA' | 'VOLTA' }[];
-    sunday: { time: string; direction: 'IDA' | 'VOLTA' }[];
+    weekdays: { time: string; direction: 'IDA' | 'VOLTA'; section_name?: string }[];
+    saturday: { time: string; direction: 'IDA' | 'VOLTA'; section_name?: string }[];
+    sunday: { time: string; direction: 'IDA' | 'VOLTA'; section_name?: string }[];
   };
   letreiro_principal: string;
   letreiro_principal_modo: 'FIXO' | 'ROLANTE';
@@ -127,6 +127,8 @@ export interface BusRoute {
   payment_methods_accepted?: string[];
   estimated_travel_time_text?: string;
   service_class?: string;
+  exibir_codigo_letreiro?: boolean;
+  letreiro_cor_preview?: 'AMBAR' | 'BRANCO';
 }
 
 export interface Occurrence {

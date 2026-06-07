@@ -1277,7 +1277,7 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                   </div>
                   {/* Pré-visualização A4 */}
                   <div className="max-w-[210mm] mx-auto bg-white p-12 shadow-2xl border border-slate-200 print:shadow-none print:border-0">
-                      <TicketVoucher type="passageiro" lastTicket={lastTicket} selectedRoute={selectedRoute} selectedTrip={selectedTrip} />
+                      <TicketVoucher type="passageiro" lastTicket={lastTicket} selectedRoute={lastTicket.route_data || selectedRoute} selectedTrip={lastTicket.trip_data || selectedTrip} />
                       <div className="border-t-4 border-dashed border-slate-300 my-12 flex items-center justify-center relative">
                           <div className="absolute -top-4 bg-white px-4 flex items-center gap-2 text-slate-300 font-black text-[10px] uppercase">
                               <Scissors size={16}/> Recortar Via do Motorista
@@ -1724,8 +1724,8 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
 
                                       return (
                                         <>
-                                           {filteredTrips.map(t => (
-                                               <button key={t.id} onClick={() => { setSelectedTripId(t.id); setIsPresale(false); setStep(3); }} className="p-8 bg-white dark:bg-zinc-800 rounded-3xl border-4 border-transparent hover:border-yellow-400 shadow-sm transition-all text-center">
+                                           {filteredTrips.map((t, idx) => (
+                                               <button key={`${t.id || 'trip'}-${idx}`} onClick={() => { setSelectedTripId(t.id); setIsPresale(false); setStep(3); }} className="p-8 bg-white dark:bg-zinc-800 rounded-3xl border-4 border-transparent hover:border-yellow-400 shadow-sm transition-all text-center">
                                                    <span className="text-3xl font-black font-mono dark:text-white leading-none">{t.departure_time}</span>
                                                    <p className="text-[9px] font-black text-slate-400 uppercase mt-2">Carro {t.bus_number} • {t.direction || 'IDA'}</p>
                                                </button>
@@ -1929,9 +1929,9 @@ const TicketAgentInterface: React.FC<TicketAgentInterfaceProps> = ({
                                                            </div>
                                                            <div>
                                                                <label className="text-[8px] font-black uppercase text-slate-400 mb-1 block ml-2">Troco do Passageiro</label>
-                                                               <div className="w-full px-6 py-4 bg-emerald-600 text-white rounded-2xl font-black flex flex-col justify-center shadow-lg h-full">
+                                                               <div className="w-full px-5 py-2 bg-emerald-600 text-white rounded-2xl font-black flex flex-col justify-center shadow-md h-12">
                                                                    <span className="text-[8px] uppercase opacity-70">Troco Sugerido</span>
-                                                                   <span className="text-xl leading-none">R$ {changeAmount.toFixed(2)}</span>
+                                                                   <span className="text-base leading-none mt-0.5">R$ {changeAmount.toFixed(2)}</span>
                                                                </div>
                                                            </div>
                                                        </div>

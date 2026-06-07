@@ -32,6 +32,7 @@ import NotificationManager from './components/NotificationManager';
 import RecruitmentPanel from './components/RecruitmentPanel';
 import SkinRepository from './components/SkinRepository';
 import { NotificationService } from './services/NotificationService';
+import { MockNotificationService } from './services/MockNotificationService';
 import SystemConfigManager from './components/SystemConfigManager';
 import DispatcherManager from './components/DispatcherManager';
 import SACManager from './components/SACManager';
@@ -165,7 +166,7 @@ const ViewContent: React.FC<{
         initialPassengerData={notificationMetadata?.passengerData}
         isPassengerView={notificationMetadata?.isPassengerTicketing}
       />;
-      case 'inspections': return <InspectionManager {...commonProps} onAddInspection={i => handleAction('create', 'driver_logs', i)} onDeleteInspection={id => handleAction('delete', 'driver_logs', id)} />;
+      case 'inspections': return <InspectionManager {...commonProps} onAddInspection={i => handleAction('create', 'driver_logs', i)} onUpdateInspection={i => handleAction('update', 'driver_logs', i)} onDeleteInspection={id => handleAction('delete', 'driver_logs', id)} />;
       case 'ticketing-config': return <TicketingConfigManager initialConfig={ticketingConfig} onUpdateConfig={c => handleAction('update', 'ticketing_config', c)} addToast={addToast} />;
       case 'time-tracking': return <TimeTrackingManager currentUser={currentUser} addToast={addToast} />;
       case 'payroll': return <PayrollManager users={users} companies={companies} addToast={addToast} />;
@@ -942,13 +943,14 @@ const App: React.FC = () => {
       
       const link = document.createElement('a');
       const todayStr = new Date().toISOString().split('T')[0];
+      const backupFileName = `vialivre_backup_completo_${todayStr}.json`;
       link.href = url;
-      link.download = `vialivre_backup_completo_${todayStr}.json`;
+      link.download = backupFileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
+      // URL.revokeObjectURL(url); // Don't revoke immediately to keep notification downloads functional
+      
       localStorage.setItem('vialivre_last_weekly_backup_timestamp', Date.now().toString());
       addToast(
         isManual 
@@ -956,6 +958,21 @@ const App: React.FC = () => {
           : "Backup semanal automático concluído! Arquivo JSON salvo com sucesso.", 
         "success"
       );
+
+      if (!isManual && currentUser) {
+        try {
+          await MockNotificationService.notifyAdminAboutBackup(
+            currentUser.id,
+            currentUser.email || 'admin@vialivre.com',
+            backupFileName,
+            url,
+            currentUser.system_id
+          );
+          loadInitialData(); // Reload definitions so system notification instantly renders
+        } catch (notifErr) {
+          console.error("Erro ao registrar notificações do backup automático:", notifErr);
+        }
+      }
     } catch (err: any) {
       console.error("Erro ao gerar backup de dados:", err);
       addToast("Erro ao processar cópia de segurança de dados.", "error");
@@ -1499,7 +1516,7 @@ const App: React.FC = () => {
           )}
         </AnimatePresence>
 
-        {isMobile && currentView !== 'driver-view' && <MobileBottomNav currentView={currentView} onChangeView={(v) => setCurrentView(v)} onOpenMenu={() => setIsSidebarOpen(true)} currentUser={currentUser} />}
+
 
         {showTutorial && (() => {
           const userRole = currentUser?.role || 'ADMIN';

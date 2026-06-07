@@ -499,7 +499,10 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({
   }, [routes, searchTerm, filterCompany, filterCity, cepCity]);
 
   const activeNotices = useMemo(() => {
-      return notices.filter(n => !hiddenNotices.has(n.id));
+      return (notices || []).filter(n => {
+        const matchesRole = !n.target_role || n.target_role === 'PASSENGER' || n.target_role === 'ALL';
+        return matchesRole && !hiddenNotices.has(n.id);
+      });
   }, [notices, hiddenNotices]);
 
   const now = new Date();
@@ -803,7 +806,7 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({
                               </h4>
                               <div className="grid gap-2">
                                   {selectedRouteDetails.sections.map((section, idx) => (
-                                      <div key={idx} className="p-3 bg-slate-50 dark:bg-zinc-800/50 rounded-xl border border-dotted border-slate-200 dark:border-zinc-700 flex justify-between items-center text-[10px]">
+                                      <div key={idx} className="p-3 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-dotted border-slate-200 dark:border-zinc-850 flex justify-between items-center text-[10px]">
                                           <div className="flex flex-col">
                                               <span className="font-black uppercase">{section.origin} x {section.destination}</span>
                                               <span className="text-slate-400">Tarifa Seção</span>
@@ -845,74 +848,83 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({
                               </div>
                           </div>
 
-                          {selectedRouteDetails.route_type === 'URBANO' ? (
-                              <div className="p-6 bg-red-50 dark:bg-red-950/20 text-red-650 dark:text-red-400 border border-red-200 dark:border-red-900/40 rounded-3xl text-center text-[10px] font-black uppercase space-y-2">
-                                  <p className="font-extrabold text-xs">Rota Urbana</p>
-                                  <p className="text-[9px] text-slate-500 dark:text-zinc-400 italic font-bold">As rotas urbanas não estão liberadas para venda de passagens antecipada ou autoatendimento. Pague diretamente ao operador a bordo do veículo.</p>
-                              </div>
-                          ) : (
-                              <div className="grid grid-cols-1 gap-3">
-                                  {currentSchedules.length > 0 ? (
-                                      currentSchedules.map((item, sIdx) => {
-                                          const matchingTrip = trips.find(t => 
-                                              t.route_id === selectedRouteDetails.id &&
-                                              t.direction === detailDirection &&
-                                              t.trip_date === scheduleDate &&
-                                              t.departure_time === item.time &&
-                                              !t.finished
-                                          );
-
-                                          return (
-                                              <div 
-                                                key={sIdx} 
-                                                className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
-                                                  matchingTrip 
-                                                    ? 'bg-indigo-50/30 dark:bg-indigo-950/10 border-indigo-100 dark:border-indigo-900/30' 
-                                                    : 'bg-slate-50/50 dark:bg-zinc-805/20 border-slate-150 dark:border-zinc-800'
-                                                }`}
-                                              >
-                                                <div className="flex-1 space-y-1.5 text-left">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className="px-2.5 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-extrabold rounded-xl text-xs">{item.time}</span>
-                                                        {matchingTrip ? (
-                                                          <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold rounded-lg text-[9px] uppercase border border-emerald-500/20">Escala Ativa • Ônibus {matchingTrip.bus_number}</span>
-                                                        ) : (
-                                                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-405 font-bold rounded-lg text-[8px] uppercase">Previsto no Quadro</span>
-                                                        )}
-                                                    </div>
-                                                    {matchingTrip ? (
-                                                      <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-extrabold uppercase">
-                                                          <span className="block">Motorista: {matchingTrip.driver_name}</span>
-                                                          {matchingTrip.conductor_name && <span className="block text-[9px] text-slate-400">Cobrador: {matchingTrip.conductor_name}</span>}
-                                                      </div>
-                                                    ) : (
-                                                      <span className="block text-[9px] italic text-slate-400 font-semibold uppercase">Escala ainda não programada para este dia</span>
-                                                    )}
-                                                </div>
-                                                
-                                                {matchingTrip && (
-                                                  <button 
-                                                    onClick={() => handleBuyClick(matchingTrip.id, selectedRouteDetails.id)}
-                                                    className="px-4 py-2.5 bg-indigo-600 dark:bg-indigo-500 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
-                                                  >
-                                                    <span>Comprar</span>
-                                                    <ShoppingCart size={13} className="text-white/70"/>
-                                                  </button>
-                                                )}
-                                              </div>
-                                          );
-                                      })
-                                  ) : (
-                                      <div className="py-8 text-center text-slate-400 text-[10px] font-black uppercase italic border border-dashed rounded-2xl">
-                                          Sem horários programados neste dia para direção {detailDirection === 'IDA' ? 'Ida' : 'Volta'}
-                                      </div>
-                                  )}
+                          {selectedRouteDetails.route_type === 'URBANO' && (
+                              <div className="p-4 bg-amber-50 dark:bg-yellow-950/15 text-amber-800 dark:text-yellow-500 border border-yellow-250 dark:border-yellow-500/30 rounded-2xl text-[9px] font-black uppercase text-center leading-relaxed">
+                                  ⚠️ Rota Urbana / Municipal: O pagamento da tarifa é realizado diretamente ao operador, a bordo do veículo. Não há venda antecipada de passagens no autoatendimento.
                               </div>
                           )}
+
+                          <div className="grid grid-cols-1 gap-3">
+                              {currentSchedules.length > 0 ? (
+                                  currentSchedules.map((item, sIdx) => {
+                                      const matchingTrip = trips.find(t => 
+                                          t.route_id === selectedRouteDetails.id &&
+                                          t.direction === detailDirection &&
+                                          t.trip_date === scheduleDate &&
+                                          t.departure_time === item.time &&
+                                          !t.finished
+                                      );
+
+                                      return (
+                                          <div 
+                                            key={sIdx} 
+                                            className={`p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                                              matchingTrip 
+                                                ? 'bg-indigo-50/30 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/40' 
+                                                : 'bg-slate-50/50 dark:bg-zinc-950 border-slate-150 dark:border-zinc-850'
+                                            }`}
+                                          >
+                                            <div className="flex-1 space-y-1.5 text-left">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="px-2.5 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-extrabold rounded-xl text-xs">{item.time}</span>
+                                                    {matchingTrip ? (
+                                                      <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold rounded-lg text-[9px] uppercase border border-emerald-500/20">Escala Ativa • Ônibus {matchingTrip.bus_number}</span>
+                                                    ) : (
+                                                      <span className="px-2 py-0.5 bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-405 font-bold rounded-lg text-[8px] uppercase">Previsto no Quadro</span>
+                                                    )}
+                                                </div>
+                                                {matchingTrip ? (
+                                                  <div className="text-[10px] text-slate-500 dark:text-zinc-400 font-extrabold uppercase">
+                                                      <span className="block">Motorista: {matchingTrip.driver_name}</span>
+                                                      {matchingTrip.conductor_name && <span className="block text-[9px] text-slate-400">Cobrador: {matchingTrip.conductor_name}</span>}
+                                                  </div>
+                                                ) : (
+                                                  <span className="block text-[9px] italic text-slate-400 font-semibold uppercase">Escala ainda não programada para este dia</span>
+                                                )}
+                                            </div>
+                                            
+                                            {matchingTrip && (
+                                              selectedRouteDetails.route_type === 'URBANO' ? (
+                                                <div className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-zinc-900 text-amber-600 dark:text-amber-500 font-black uppercase text-[9px] rounded-xl border-2 border-dashed border-amber-305 dark:border-amber-500/50 text-center leading-none">
+                                                  Pagamento no veículo
+                                                </div>
+                                              ) : (
+                                                <button 
+                                                  onClick={() => handleBuyClick(matchingTrip.id, selectedRouteDetails.id)}
+                                                  className="px-4 py-2.5 bg-indigo-600 dark:bg-indigo-500 hover:bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-all shadow-md active:scale-95 shrink-0"
+                                                >
+                                                  <span>Comprar</span>
+                                                  <ShoppingCart size={13} className="text-white/70"/>
+                                                </button>
+                                              )
+                                            )}
+                                          </div>
+                                      );
+                                  })
+                              ) : (
+                                  <div className="py-8 text-center text-slate-400 text-[10px] font-black uppercase italic border border-dashed rounded-2xl">
+                                      Sem horários programados neste dia para direção {detailDirection === 'IDA' ? 'Ida' : 'Volta'}
+                                  </div>
+                              )}
+                          </div>
                       </div>
                   </div>
                   <div className="p-6 bg-slate-50 dark:bg-zinc-900 border-t dark:border-zinc-800 flex flex-col gap-2 shrink-0">
-                      <p className="text-[9px] font-black uppercase text-slate-400 text-center italic">Escolha um horário acima para comprar sua passagem</p>
+                      <p className="text-[9px] font-black uppercase text-slate-400 text-center italic">
+                        {selectedRouteDetails.route_type === 'URBANO' 
+                          ? 'Esta linha não aceita venda online. Efetue pagamento direto ao motorista/cobrador no veículo.' 
+                          : 'Escolha um horário acima para comprar sua passagem'}
+                      </p>
                   </div>
               </div>
           </div>
@@ -986,7 +998,7 @@ const PassengerInterface: React.FC<PassengerInterfaceProps> = ({
                                                         <div className="grid gap-2">
                                                             {upcomingTrips.length > 0 ? (
                                                                 upcomingTrips.map((t, idx) => (
-                                                                    <div key={idx} className="p-3 bg-slate-50 dark:bg-zinc-800/40 rounded-xl border border-slate-100 dark:border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-left">
+                                                                    <div key={idx} className="p-3 bg-slate-50 dark:bg-zinc-950 rounded-xl border border-slate-100 dark:border-zinc-850 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-left">
                                                                         <div className="flex items-center gap-2">
                                                                             <span className="px-2 py-1 bg-indigo-600 dark:bg-indigo-500 text-white font-black rounded-lg text-[10px]">{t.departure_time}</span>
                                                                             <div className="flex flex-col text-[9px] leading-tight text-slate-500 dark:text-zinc-400 font-medium uppercase">

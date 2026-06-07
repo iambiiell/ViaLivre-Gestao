@@ -1,8 +1,9 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Bell, Search, Filter, CheckCircle2, AlertTriangle, Info, Trash2, Clock, Settings, Plus, X, Save, Loader2, Edit3, Archive, FolderOpen } from 'lucide-react';
+import { Bell, Search, Filter, CheckCircle2, AlertTriangle, Info, Trash2, Clock, Settings, Plus, X, Save, Loader2, Edit3, Archive, FolderOpen, Download } from 'lucide-react';
 import { AppNotification, User, Trip, Vehicle } from '../types';
 import { db, supabase } from '../services/database';
+import { WebPushConfig } from './WebPushConfig';
 
 interface NotificationManagerProps {
   notifications: AppNotification[];
@@ -51,7 +52,7 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
 
   const [animatingOutIds, setAnimatingOutIds] = useState<Set<string>>(new Set());
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [activeSubTab, setActiveSubTab] = useState<'alerts' | 'rules'>('alerts');
+  const [activeSubTab, setActiveSubTab] = useState<'alerts' | 'rules' | 'webpush'>('alerts');
 
   // Edit Notification States
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -59,6 +60,7 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
   const [editTitle, setEditTitle] = useState('');
   const [editMessage, setEditMessage] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [selectedDetailAlert, setSelectedDetailAlert] = useState<AppNotification | null>(null);
 
   const handleOpenEditModal = (notif: AppNotification) => {
     setEditingNotification(notif);
@@ -316,9 +318,6 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
 
       if (didTriggerChanges) {
         onRefresh();
-        if (newNotificationsToInsert.length > 0) {
-          addToast(`Regras de Alertas: ${newNotificationsToInsert.length} novas notificações geradas!`, "warning");
-        }
       }
 
     } catch (err) {
@@ -509,16 +508,16 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
         </div>
       </div>
 
-      {/* TABS (FOR ADMIN ONLY) */}
-      {currentUser?.role === 'ADMIN' && (
-        <div className="flex bg-white dark:bg-zinc-900 p-1.5 rounded-[1.8rem] border border-slate-100 dark:border-zinc-800 shadow-sm max-w-md">
-          <button 
-            type="button"
-            onClick={() => setActiveSubTab('alerts')} 
-            className={`flex-1 py-3 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'alerts' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 dark:hover:text-zinc-305'}`}
-          >
-            📋 Alertas Recebidos
-          </button>
+      {/* TABS */}
+      <div className="flex bg-white dark:bg-zinc-900 p-1.5 rounded-[1.8rem] border border-slate-100 dark:border-zinc-800 shadow-sm max-w-xl">
+        <button 
+          type="button"
+          onClick={() => setActiveSubTab('alerts')} 
+          className={`flex-1 py-3 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'alerts' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 dark:hover:text-zinc-305'}`}
+        >
+          📋 Alertas Recebidos
+        </button>
+        {currentUser?.role === 'ADMIN' && (
           <button 
             type="button"
             onClick={() => setActiveSubTab('rules')} 
@@ -526,8 +525,15 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
           >
             ⚙️ Regras & Lembretes
           </button>
-        </div>
-      )}
+        )}
+        <button 
+          type="button"
+          onClick={() => setActiveSubTab('webpush')} 
+          className={`flex-1 py-3 px-6 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubTab === 'webpush' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-600 dark:hover:text-zinc-305'}`}
+        >
+          🔔 Web Push & SW
+        </button>
+      </div>
 
       {/* CARD CONFIG REGRAS DE MANUTENÇÃO (EXCLUSIVO ADMIN) */}
       {currentUser?.role === 'ADMIN' && activeSubTab === 'rules' && (
@@ -605,8 +611,8 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
         </div>
       )}
 
-      {/* FILTER & LIST TAB (IF NOT RULES SUBTAB OR NOT ADMIN) */}
-      {(currentUser?.role !== 'ADMIN' || activeSubTab === 'alerts') && (
+      {/* FILTER & LIST TAB */}
+      {activeSubTab === 'alerts' && (
         <>
           {/* FILTERS */}
           <div className="flex flex-col sm:flex-row gap-4 items-center">
@@ -672,8 +678,11 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
                 return (
                   <div 
                     key={n.id} 
-                    onClick={() => onNotificationClick?.(n)}
-                    className={`notification-item bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border-2 ${borderLeftClass} flex items-start gap-6 group cursor-pointer transition-all duration-500 transform ${
+                    onClick={() => {
+                      setSelectedDetailAlert(n);
+                      onNotificationClick?.(n);
+                    }}
+                    className={`notification-item bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border-2 ${borderLeftClass} flex flex-col sm:flex-row items-start gap-4 sm:gap-6 group cursor-pointer transition-all duration-500 transform ${
                       isAnimatingOut 
                         ? 'notification-item-fadeout opacity-0 -translate-x-12 scale-90 blur-lg max-h-0 py-0 my-0 border-transparent overflow-hidden pointer-events-none'
                         : n.is_read 
@@ -698,8 +707,8 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
                   </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-2">
+                <div className="flex-1 min-w-0 w-full">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
                     <div>
                       <h3 className="font-black text-slate-800 dark:text-zinc-100 uppercase text-sm leading-tight flex items-center gap-2">
                         {!n.is_read && (
@@ -715,17 +724,7 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
                         {new Date(n.created_at).toLocaleString('pt-BR')} • {n.category}
                       </p>
                     </div>
-                    <div className="flex gap-2 items-center">
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleOpenEditModal(n);
-                        }} 
-                        className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 rounded-lg transition-all" 
-                        title="Editar Notificação"
-                      >
-                        <Edit3 size={18}/>
-                      </button>
+                    <div className="flex gap-2 items-center self-end sm:self-auto shrink-0">
                       {!n.is_read && (
                         <button 
                           onClick={(e) => {
@@ -774,6 +773,20 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
                     </div>
                   </div>
                   <p className="text-xs text-slate-600 dark:text-zinc-400 leading-relaxed">{n.message}</p>
+                  {n.metadata?.download_url && (
+                    <div className="mt-4 flex">
+                      <a 
+                        href={n.metadata.download_url} 
+                        download={n.metadata.file_name || "vialivre_backup_completo.json"}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-yellow-400 hover:bg-yellow-500 active:scale-95 text-slate-900 text-[10px] font-black uppercase rounded-xl shadow-lg transition-all border-2 border-slate-900 tracking-wider"
+                      >
+                        <Download size={14} className="animate-pulse" /> Baixar Cópia (.JSON)
+                      </a>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -781,6 +794,11 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
         )}
       </div>
         </>
+      )}
+
+      {/* WEBPUSH SETTINGS TAB */}
+      {activeSubTab === 'webpush' && (
+        <WebPushConfig currentUser={currentUser} addToast={addToast} />
       )}
 
       {/* CONFIG MODAL */}
@@ -871,6 +889,128 @@ const NotificationManager: React.FC<NotificationManagerProps> = ({ notifications
                 className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs shadow-xl active:scale-95 border-2 border-slate-950 transition-all flex items-center justify-center gap-2"
               >
                 {isSavingEdit ? <Loader2 className="animate-spin" size={18}/> : 'Salvar Alterações'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DETAILED POPUP MODAL */}
+      {selectedDetailAlert && (
+        <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 z-[140] flex items-center justify-center p-4 backdrop-blur-md animate-in fade-in zoom-in duration-300">
+          <div className="bg-white dark:bg-zinc-950 w-full max-w-2xl rounded-[3rem] shadow-2xl border dark:border-zinc-850 overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+            {/* Header with category and close */}
+            <div className="p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 flex justify-between items-center transition-colors shrink-0">
+              <div className="flex items-center gap-3">
+                <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                  selectedDetailAlert.category === 'DELAY' ? 'bg-red-105 text-red-700 dark:bg-red-950/40 dark:text-red-400' :
+                  selectedDetailAlert.category === 'MAINTENANCE' ? 'bg-yellow-105 text-yellow-700 dark:bg-yellow-950/40 dark:text-yellow-400' :
+                  'bg-blue-105 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400'
+                }`}>
+                  {selectedDetailAlert.category}
+                </span>
+                <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">
+                  Detalhes do Alerta
+                </span>
+              </div>
+              <button onClick={() => setSelectedDetailAlert(null)} className="text-slate-400 dark:text-zinc-500 hover:rotate-90 transition-transform">
+                <X size={32} />
+              </button>
+            </div>
+            
+            {/* Message, description, time and nice details */}
+            <div className="p-8 space-y-6 overflow-y-auto custom-scrollbar bg-white dark:bg-zinc-950">
+              <div className="flex items-start gap-4">
+                <div className={`p-4 rounded-xl text-white shrink-0 ${
+                  selectedDetailAlert.type === 'ERROR' ? 'bg-red-500' :
+                  selectedDetailAlert.type === 'WARNING' || selectedDetailAlert.category === 'DELAY' ? 'bg-orange-500' :
+                  'bg-blue-500'
+                }`}>
+                  {selectedDetailAlert.type === 'ERROR' ? <AlertTriangle size={28}/> : 
+                   selectedDetailAlert.type === 'WARNING' || selectedDetailAlert.category === 'DELAY' ? <Clock size={28}/> : 
+                   <Info size={28}/>}
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-zinc-100 uppercase tracking-tight">{selectedDetailAlert.title}</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                    {new Date(selectedDetailAlert.created_at).toLocaleString('pt-BR')} (Horário Oficial Brasília)
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-6 bg-slate-50 dark:bg-zinc-900 rounded-3xl border border-slate-100 dark:border-zinc-800 text-slate-700 dark:text-zinc-305">
+                <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2">Mensagem do Comunicado</h4>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap font-bold">{selectedDetailAlert.message}</p>
+              </div>
+
+              {/* Advanced detailed block based on the type of notification */}
+              <div className="border-t dark:border-zinc-800 pt-6 space-y-4">
+                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" /> Metadados & Diagnóstico Técnico
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-slate-50/50 dark:bg-zinc-900/50 rounded-2xl border border-slate-100/50 dark:border-zinc-800">
+                    <p className="text-[8px] font-black uppercase text-slate-400">ID Único do Alerta</p>
+                    <p className="text-xs font-mono font-bold text-slate-650 mt-1 truncate">{selectedDetailAlert.id}</p>
+                  </div>
+                  <div className="p-4 bg-slate-50/50 dark:bg-zinc-900/50 rounded-2xl border border-slate-100/50 dark:border-zinc-800">
+                    <p className="text-[8px] font-black uppercase text-slate-400">Alvo de Visualização (Papel)</p>
+                    <p className="text-xs font-black uppercase text-slate-600 mt-1">{selectedDetailAlert.target_role || 'TODOS (PÚBLICO)'}</p>
+                  </div>
+                </div>
+
+                {selectedDetailAlert.metadata && Object.keys(selectedDetailAlert.metadata).filter(k => typeof selectedDetailAlert.metadata[k] !== 'object').length > 0 && (
+                  <div className="p-6 bg-blue-50/10 dark:bg-zinc-900 rounded-2xl border border-blue-100/25 dark:border-zinc-800 space-y-3">
+                    <p className="text-[8px] font-black uppercase text-blue-500 tracking-widest">Informações Extras de Telemetria</p>
+                    <div className="grid grid-cols-2 gap-2 text-[10px] font-bold">
+                      {Object.entries(selectedDetailAlert.metadata).map(([mKey, mVal]) => {
+                        if (typeof mVal === 'object' || mVal === null) return null;
+                        return (
+                          <div key={mKey} className="flex justify-between border-b dark:border-zinc-800 pb-1">
+                            <span className="text-slate-400 uppercase text-[9px]">{mKey.replace(/_/g, ' ')}:</span>
+                            <span className="text-slate-800 dark:text-zinc-250 font-mono text-[9px]">{mVal.toString()}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {selectedDetailAlert.metadata?.download_url && (
+                <div className="mt-4 flex">
+                  <a 
+                    href={selectedDetailAlert.metadata.download_url} 
+                    download={selectedDetailAlert.metadata.file_name || "vialivre_backup_completo.json"}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-yellow-400 hover:bg-yellow-500 text-slate-900 text-[11px] font-black uppercase rounded-2xl shadow-xl transition-all border-2 border-slate-900 tracking-wider"
+                  >
+                    <Download size={16} /> Baixar Cópia Completa (.JSON)
+                  </a>
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer with action buttons */}
+            <div className="p-6 border-t dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 flex justify-end gap-3 shrink-0">
+              {!selectedDetailAlert.is_read && (
+                <button 
+                  onClick={() => {
+                    handleMarkAsRead(selectedDetailAlert.id);
+                    setSelectedDetailAlert(null);
+                  }}
+                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase"
+                >
+                  Marcar como Lida
+                </button>
+              )}
+              <button 
+                onClick={() => setSelectedDetailAlert(null)}
+                className="px-6 py-3 bg-slate-200 dark:bg-zinc-850 text-slate-700 dark:text-zinc-300 rounded-xl text-[10px] font-black uppercase"
+              >
+                Fechar
               </button>
             </div>
           </div>

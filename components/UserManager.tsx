@@ -134,12 +134,71 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
         <button onClick={() => handleOpenModal()} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95 transition-all"><UserPlus size={18} /> Novo Acesso</button>
       </div>
 
-      <div className="bg-white dark:bg-zinc-900 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden transition-colors">
+      {/* Mobile-first card list layout */}
+      <div className="block lg:hidden space-y-4">
+        {filteredUsers.map(user => (
+          <div key={user.id} className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm space-y-4 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-zinc-800 border border-slate-100 dark:border-zinc-700 flex items-center justify-center text-slate-300 dark:text-zinc-600 overflow-hidden shadow-sm transition-colors">
+                {user.photo_url ? <img src={user.photo_url} className="w-full h-full object-cover" alt="Foto"/> : <UserCircle size={22} />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-black text-slate-800 dark:text-zinc-100 text-xs uppercase truncate">{user.full_name || user.name}</p>
+                <p className="text-[10px] text-blue-600 font-bold truncate">{user.email}</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-50 dark:border-zinc-800">
+              <div>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Login / Usuário</p>
+                <p className="text-[10px] font-black text-slate-500 dark:text-zinc-400 uppercase mt-1">{user.login_acesso || '---'}</p>
+              </div>
+              <div>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Unidade</p>
+                <p className="text-[9px] font-bold text-yellow-600 uppercase mt-1">{user.unidade || 'SEM UNIDADE'}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-4 border-t border-slate-50 dark:border-zinc-800">
+              <div>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Cargo</p>
+                <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest transition-colors ${
+                    user.role === 'ADMIN' ? 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600' : 
+                    user.role === 'DRIVER' ? 'bg-blue-50 dark:bg-blue-900/10 text-blue-600' :
+                    user.role === 'TICKET_AGENT' ? 'bg-amber-50 dark:bg-amber-900/10 text-amber-600' :
+                    user.role === 'RH' ? 'bg-purple-50 dark:bg-purple-900/10 text-purple-600' :
+                    user.role === 'MECHANIC' ? 'bg-red-50 dark:bg-red-900/10 text-red-600' :
+                    user.role === 'FISCAL' ? 'bg-emerald-50 dark:bg-emerald-900/10 text-emerald-600' :
+                    'bg-slate-50 dark:bg-zinc-800 text-slate-500'
+                }`}>{
+                    user.job_title || user.role
+                }</span>
+                {user.is_full_admin && (
+                  <span className="ml-1.5 px-2 py-0.5 bg-yellow-400 text-slate-900 rounded text-[7px] font-black uppercase">FULL</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => handleOpenModal(user)} className="p-3 bg-slate-50 hover:bg-slate-100 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-blue-600 dark:text-blue-400 rounded-xl transition-all shadow-sm">
+                  <Pencil size={18} />
+                </button>
+                {user.id !== currentUser?.id && (
+                  <button onClick={() => onDeleteUser(user.id)} className="p-3 bg-red-50 hover:bg-red-100 dark:bg-red-950/20 text-red-600 dark:text-red-400 rounded-xl transition-all shadow-sm">
+                    <Trash2 size={18} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop view style table layout */}
+      <div className="hidden lg:block bg-white dark:bg-zinc-900 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 overflow-hidden transition-colors">
         <table className="w-full text-left">
           <thead className="bg-slate-50/50 dark:bg-zinc-800/50 border-b border-slate-100 dark:border-zinc-800 text-slate-400 dark:text-zinc-500 uppercase text-[9px] font-black tracking-[0.2em] transition-colors">
             <tr>
                 <th className="px-8 py-6">Colaborador</th>
-                <th className="px-8 py-6">Login / Unidade</th>
+                <th className="px-8 py-4 md:py-6">Login / Unidade</th>
                 <th className="px-8 py-6">Tipo</th>
                 <th className="px-8 py-6 text-right">Gestão</th>
             </tr>
@@ -201,12 +260,13 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 z-[120] flex items-center justify-center p-4 backdrop-blur-md animate-in zoom-in duration-300">
-          <div className="bg-white dark:bg-zinc-950 w-full max-w-lg rounded-[3rem] shadow-2xl border dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh] transition-colors">
-            <div className="p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 flex justify-between items-center transition-colors">
+          <div className="bg-white dark:bg-zinc-950 w-full max-w-lg rounded-3xl md:rounded-[3rem] shadow-2xl border dark:border-zinc-800 overflow-hidden flex flex-col max-h-[90vh] transition-colors">
+            <div className="p-6 md:p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 flex justify-between items-center transition-colors">
                 <h3 className="text-xl font-black text-slate-900 dark:text-zinc-100 uppercase italic leading-none">{editingId ? 'Editar Acesso' : 'Criar Novo Acesso'}</h3>
                 <button onClick={handleCloseModal} className="text-slate-400 dark:text-zinc-500 hover:rotate-90 transition-transform"><X size={32} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-6 bg-white dark:bg-zinc-950 transition-colors overflow-y-auto custom-scrollbar">
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+                <div className="p-6 md:p-8 space-y-4 md:space-y-6 bg-white dark:bg-zinc-950 transition-colors overflow-y-auto flex-1 custom-scrollbar">
                 <div>
                    <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">Nome Completo *</label>
                    <input className={inputClass('full_name')} value={formData.full_name || ''} onChange={e => setFormData({...formData, full_name: e.target.value})} placeholder="Ex: Ana Souza" />
@@ -215,7 +275,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
                    <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">E-mail Corporativo *</label>
                    <input type="email" className={inputClass('email')} value={formData.email || ''} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="ana@empresa.com.br" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">Usuário *</label>
                         <input className={inputClass('login_acesso')} value={formData.login_acesso || ''} onChange={e => setFormData({...formData, login_acesso: e.target.value})} placeholder="login" />
@@ -240,7 +300,7 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
                         </div>
                     </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[9px] font-black text-black uppercase mb-1 ml-2">Unidade operacional *</label>
                         <select 
@@ -280,22 +340,22 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
 
                 <div className="space-y-4 p-6 bg-slate-50 dark:bg-zinc-900 rounded-2xl border border-slate-100 dark:border-zinc-800">
                     <h4 className="text-[10px] font-black uppercase text-blue-600 mb-2 flex items-center gap-2"><MapPin size={12} /> Endereço Residencial</h4>
-                    <div className="grid grid-cols-3 gap-4">
+                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="col-span-1">
                             <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">CEP</label>
                             <input className={inputClass('cep')} value={formData.cep || ''} onChange={e => setFormData({...formData, cep: cepMask(e.target.value)})} placeholder="00000-000" />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-1 sm:col-span-2">
                             <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Logradouro</label>
                             <input className={inputClass('address_street')} value={formData.address_street || ''} onChange={e => setFormData({...formData, address_street: e.target.value})} placeholder="Rua, Av..." />
                         </div>
                     </div>
-                    <div className="grid grid-cols-4 gap-4">
-                        <div>
+                     <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div className="col-span-1">
                             <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Nº</label>
                             <input className={inputClass('address_number')} value={formData.address_number || ''} onChange={e => setFormData({...formData, address_number: e.target.value})} placeholder="123" />
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-1 sm:col-span-3">
                             <label className="block text-[8px] font-black text-slate-400 uppercase mb-1">Bairro</label>
                             <input className={inputClass('address_neighborhood')} value={formData.address_neighborhood || ''} onChange={e => setFormData({...formData, address_neighborhood: e.target.value})} placeholder="Centro" />
                         </div>
@@ -359,7 +419,9 @@ const UserManager: React.FC<UserManagerProps> = ({ users = [], currentUser, role
                   </div>
                 )}
 
-                <div className="p-8 border-t dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 flex gap-4 transition-colors">
+                </div>
+
+                <div className="p-6 md:p-8 border-t dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900 flex gap-4 transition-colors">
                     <button type="button" onClick={handleCloseModal} className="flex-1 py-4 text-slate-400 font-black uppercase text-[10px] tracking-widest">Cancelar</button>
                     <button type="submit" className="flex-[2] py-4 bg-blue-600 text-white rounded-[2rem] font-black uppercase text-xs shadow-xl active:scale-95 flex items-center justify-center gap-2 hover:bg-blue-700 transition-all"><Save size={20}/> Gravar Acesso</button>
                 </div>

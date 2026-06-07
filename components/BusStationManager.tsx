@@ -169,10 +169,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
       try {
         const data = await fetchAddress(clean);
         if (data) {
-          setLogradouro((data.addressStreet || '').toUpperCase());
-          setBairro((data.addressNeighborhood || '').toUpperCase());
-          setCidade((data.addressCity || '').toUpperCase());
-          setEstado((data.addressState || '').toUpperCase());
+          setLogradouro(data.addressStreet || '');
+          setBairro(data.addressNeighborhood || '');
+          setCidade(data.addressCity || '');
+          setEstado(data.addressState || '');
         } else {
           addToast("CEP não encontrado.", "warning");
         }
@@ -199,7 +199,7 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
     
     const stationData: Partial<BusStation> = { 
       name: name.trim(), 
-      address: combinedAddress.toUpperCase(), 
+      address: combinedAddress, 
       platforms: platforms.trim() 
     };
     
@@ -273,10 +273,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                 </div>
 
                 <div>
-                  <h4 className="text-lg font-black text-slate-800 dark:text-white uppercase leading-none tracking-tight">{station.name}</h4>
+                  <h4 className="text-lg font-black text-slate-800 dark:text-white leading-none tracking-tight">{station.name}</h4>
                   <div className="mt-3 flex items-start gap-2 text-slate-500 dark:text-zinc-400">
                     <MapPin size={14} className="mt-0.5 shrink-0" />
-                    <span className="text-[10px] font-black uppercase leading-tight">{station.address}</span>
+                    <span className="text-[10px] font-black leading-tight">{station.address}</span>
                   </div>
                 </div>
 
@@ -286,7 +286,7 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     {station.platforms.split(',').map((p, idx) => (
                       <span 
                         key={idx} 
-                        className="px-2.5 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-[8px] font-black uppercase rounded-lg border border-slate-200 dark:border-zinc-700"
+                        className="px-2.5 py-1 bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 text-[8px] font-black rounded-lg border border-slate-200 dark:border-zinc-700"
                       >
                         {p.trim()}
                       </span>
@@ -326,10 +326,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                   <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Nome Comercial *</label>
                   <input 
                     type="text" 
-                    placeholder="EX: RODOVIÁRIA DE BELO HORIZONTE" 
+                    placeholder="Ex: Rodoviária de Belo Horizonte" 
                     value={name} 
                     onChange={e => setName(e.target.value)}
-                    className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                    className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                   />
                 </div>
 
@@ -344,7 +344,7 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                       placeholder="00000-000" 
                       value={cep} 
                       onChange={handleCepChangeLocal}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
 
@@ -352,10 +352,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">UF / Estado *</label>
                     <input 
                       type="text" 
-                      placeholder="EX: MG" 
+                      placeholder="Ex: MG" 
                       value={estado} 
                       onChange={e => setEstado(e.target.value)}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
                 </div>
@@ -365,10 +365,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Logradouro *</label>
                     <input 
                       type="text" 
-                      placeholder="EX: AVENIDA DO CEP" 
+                      placeholder="Ex: Avenida do Contorno" 
                       value={logradouro} 
                       onChange={e => setLogradouro(e.target.value)}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
 
@@ -376,10 +376,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Número *</label>
                     <input 
                       type="text" 
-                      placeholder="EX: 123" 
+                      placeholder="Ex: 123" 
                       value={number} 
                       onChange={e => setNumber(e.target.value)}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
                 </div>
@@ -389,10 +389,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Complemento (Opcional)</label>
                     <input 
                       type="text" 
-                      placeholder="EX: SALA A" 
+                      placeholder="Ex: Sala A" 
                       value={complement} 
                       onChange={e => setComplement(e.target.value)}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
 
@@ -400,10 +400,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Bairro *</label>
                     <input 
                       type="text" 
-                      placeholder="EX: CENTRO" 
+                      placeholder="Ex: Centro" 
                       value={bairro} 
                       onChange={e => setBairro(e.target.value)}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
 
@@ -411,10 +411,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                     <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Cidade *</label>
                     <input 
                       type="text" 
-                      placeholder="EX: BELO HORIZONTE" 
+                      placeholder="Ex: Belo Horizonte" 
                       value={cidade} 
                       onChange={e => setCidade(e.target.value)}
-                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                      className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                     />
                   </div>
                 </div>
@@ -423,10 +423,10 @@ const BusStationManager: React.FC<BusStationManagerProps> = ({
                   <label className="block text-[10px] font-black text-slate-400 dark:text-zinc-500 uppercase mb-1 ml-2">Plataformas (separadas por vírgula) *</label>
                   <input 
                     type="text" 
-                    placeholder="EX: PLATAFORMA 01, PLATAFORMA 02, PLATAFORMA 03" 
+                    placeholder="Ex: Plataforma 1, Plataforma 2" 
                     value={platforms} 
                     onChange={e => setPlatforms(e.target.value)}
-                    className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 uppercase outline-none focus:border-yellow-400 transition-all text-xs"
+                    className="w-full px-5 py-4 border-2 border-slate-200 dark:border-zinc-800 rounded-2xl font-bold bg-slate-50 dark:bg-zinc-900 dark:text-zinc-100 placeholder:text-slate-300 outline-none focus:border-yellow-400 transition-all text-xs"
                   />
                   <p className="mt-2 text-[8px] font-black text-slate-400 uppercase ml-2 italic">Estas plataformas serão usadas para configurar os itinerários/rotas e serão exibidas nas passagens baixadas.</p>
                 </div>

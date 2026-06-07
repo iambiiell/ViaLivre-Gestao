@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Building2, PlayCircle, Users, DollarSign, Bus, TrendingUp, Clock, Calendar, ArrowRight, Search, AlertTriangle, ExternalLink, Download } from 'lucide-react';
 import { Trip, BusRoute, Company, IssueReport, City, PassengerDetails, Subscription } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -61,6 +61,30 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], companies = [], subscription, onForceBackup }) => {
   const [filterCompanyId, setFilterCompanyId] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
+
+  const [backupStatus, setBackupStatus] = useState<'UP_TO_DATE' | 'DELAYED'>('DELAYED');
+  const [lastBackupDate, setLastBackupDate] = useState<string>('Nenhum');
+
+  useEffect(() => {
+    const updateBackupStatus = () => {
+      const stored = localStorage.getItem('vialivre_last_weekly_backup_timestamp');
+      if (stored) {
+        const ts = parseInt(stored, 10);
+        if (!isNaN(ts)) {
+          const diffDays = (Date.now() - ts) / (1000 * 60 * 60 * 24);
+          setBackupStatus(diffDays <= 7 ? 'UP_TO_DATE' : 'DELAYED');
+          setLastBackupDate(new Date(ts).toLocaleDateString('pt-BR'));
+          return;
+        }
+      }
+      setBackupStatus('DELAYED');
+      setLastBackupDate('Nenhum');
+    };
+
+    updateBackupStatus();
+    const interval = setInterval(updateBackupStatus, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const daysUntilExpiration = useMemo(() => {
     if (!subscription || subscription.plan_type === 'LIFETIME') return null;
@@ -260,6 +284,22 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
               <p className="text-[10px] text-yellow-600 font-black uppercase tracking-[0.3em] mt-2 border-l-2 border-yellow-400 pl-3">Dashboard em Tempo Real • {formatDateBr(new Date().toISOString().split('T')[0])}</p>
           </div>
           <div className="flex flex-row items-center gap-3">
+              {/* Status de Backup em Tempo Real */}
+              <div 
+                className={`px-4 py-3 rounded-2xl border flex items-center gap-2.5 h-12 shadow-sm font-black text-[9px] uppercase tracking-widest transition-all ${
+                  backupStatus === 'UP_TO_DATE' 
+                    ? 'bg-emerald-50 dark:bg-emerald-950/25 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400' 
+                    : 'bg-red-50 dark:bg-red-950/25 border-red-200 dark:border-red-800 text-red-600 dark:text-red-400'
+                }`}
+                title={backupStatus === 'UP_TO_DATE' ? `Backup realizado em: ${lastBackupDate}` : 'Nenhum backup recente registrado nos últimos 7 dias'}
+              >
+                <div className="relative flex items-center justify-center w-2 h-2">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${backupStatus === 'UP_TO_DATE' ? 'bg-emerald-400' : 'bg-red-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${backupStatus === 'UP_TO_DATE' ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                </div>
+                <span>Backup {backupStatus === 'UP_TO_DATE' ? 'Em dia' : 'Atrasado'}</span>
+              </div>
+
               {onForceBackup && (
                 <button 
                   onClick={onForceBackup}
@@ -279,14 +319,14 @@ const Dashboard: React.FC<DashboardProps> = ({ allTrips = [], routes = [], compa
           </div>
       </div>
 
-      <div className="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
-        <div className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div>
           <StatCard title="Operação do Dia" value={summary.tripCount.toString()} icon={<PlayCircle size={24} />} color="bg-slate-900" textColor="text-white" delay={0.1} />
         </div>
-        <div className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
+        <div>
           <StatCard title="Pax Projetado" value={summary.totalPax.toLocaleString()} icon={<Users size={24} />} color="bg-yellow-400" textColor="text-slate-900" delay={0.2} />
         </div>
-        <div className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
+        <div>
           <StatCard title="Receita Líquida Estimada" value={summary.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} icon={<DollarSign size={24} />} color="bg-emerald-500" textColor="text-white" delay={0.3} />
         </div>
       </div>

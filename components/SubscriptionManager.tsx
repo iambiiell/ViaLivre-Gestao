@@ -202,11 +202,12 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
   }, [keys, searchTerm, filterStatus]);
 
   const filteredUsers = useMemo(() => {
-    return allUsers.filter(u => 
-      u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.unidade?.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+    return allUsers.filter(u => {
+      if (u.role !== 'ADMIN') return false;
+      return u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+             u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+             u.unidade?.toLowerCase().includes(searchTerm.toLowerCase());
+    }).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
   }, [allUsers, searchTerm]);
 
   const stats = useMemo(() => {
@@ -282,8 +283,8 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
       </div>
 
       {/* Stats */}
-      <div className="flex overflow-x-auto pb-6 gap-4 snap-x snap-mandatory md:grid md:grid-cols-4 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
-        <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+      <div className="flex flex-col gap-4 md:grid md:grid-cols-4 md:pb-0">
+        <div className="w-full md:min-w-0 flex-1">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm h-full">
             <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Total de Chaves</p>
             <div className="flex items-end justify-between">
@@ -292,7 +293,7 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
             </div>
           </div>
         </div>
-        <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+        <div className="w-full md:min-w-0 flex-1">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm h-full">
             <p className="text-[10px] font-black uppercase text-emerald-500 mb-1">Chaves Disponíveis</p>
             <div className="flex items-end justify-between">
@@ -301,7 +302,7 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
             </div>
           </div>
         </div>
-        <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+        <div className="w-full md:min-w-0 flex-1">
           <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2rem] border border-slate-100 dark:border-zinc-800 shadow-sm h-full">
             <p className="text-[10px] font-black uppercase text-blue-500 mb-1">Chaves Ativadas</p>
             <div className="flex items-end justify-between">
@@ -310,7 +311,7 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
             </div>
           </div>
         </div>
-        <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+        <div className="w-full md:min-w-0 flex-1">
           <div className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 shadow-xl h-full">
             <p className="text-[10px] font-black uppercase text-yellow-400 mb-1">Receita Total</p>
             <div className="flex items-end justify-between">
@@ -406,7 +407,15 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
         </div>
 
         <div className="overflow-x-auto">
-          {activeTab === 'keys' ? (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15 }}
+            >
+              {activeTab === 'keys' ? (
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/50 dark:bg-zinc-800/50">
@@ -614,6 +623,8 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
               <p className="text-[10px] font-black uppercase text-slate-400 italic tracking-widest">Nenhum registro encontrado</p>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 

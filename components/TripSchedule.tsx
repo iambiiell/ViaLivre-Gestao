@@ -244,10 +244,14 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
 
       if (editingId) {
           const time = timesToRegister[0];
-          onUpdateTrip({ ...basePayload, id: editingId, departure_time: time.time, direction: time.direction });
+          const route_type = route ? route.route_type : 'URBANO';
+          const trip_type = route_type === 'URBANO' ? 'Urbano' : 'Rodoviário';
+          onUpdateTrip({ ...basePayload, id: editingId, departure_time: time.time, direction: time.direction, trip_type });
           const msg = `ALTERAÇÃO URGENTE: Sua viagem de ${formData.trip_date} às ${time.time} (${route?.origin} x ${route?.destination}) foi alterada. Verifique o sistema.`;
           onSendSMS(formData.driver_id, msg);
       } else {
+          const route_type = route ? route.route_type : 'URBANO';
+          const trip_type = route_type === 'URBANO' ? 'Urbano' : 'Rodoviário';
           for (let i = 0; i < timesToRegister.length; i++) {
             const slot = timesToRegister[i];
             const newId = `trip-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`;
@@ -256,6 +260,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
               trip_date: formData.trip_date, 
               departure_time: slot.time,
               direction: slot.direction,
+              trip_type,
               id: newId
             });
 
@@ -307,10 +312,14 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
       setDuplicateModal(null);
       setIsModalOpen(true);
     } else if (mode === 'auto') {
+      const route = routes.find(r => r.id === trip.route_id);
+      const route_type = route ? route.route_type : 'URBANO';
+      const trip_type = trip.trip_type || (route_type === 'URBANO' ? 'Urbano' : 'Rodoviário');
       const newTrip = { 
         ...trip, 
         id: `trip-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         status: 'Agendada' as TripStatus,
+        trip_type,
         passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } },
         actual_start_time: undefined,
         actual_end_time: undefined,
@@ -320,6 +329,9 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
       setDuplicateModal(null);
     } else if (mode === 'week') {
       // Duplicate for next 7 days
+      const route = routes.find(r => r.id === trip.route_id);
+      const route_type = route ? route.route_type : 'URBANO';
+      const trip_type = trip.trip_type || (route_type === 'URBANO' ? 'Urbano' : 'Rodoviário');
       const baseDate = new Date(trip.trip_date + 'T12:00:00');
       for (let i = 1; i <= 7; i++) {
         const nextDate = new Date(baseDate);
@@ -331,6 +343,7 @@ const TripSchedule: React.FC<TripScheduleProps> = ({
           id: `trip-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 5)}`,
           trip_date: dateStr,
           status: 'Agendada' as TripStatus,
+          trip_type,
           passengers: { default: { pagantes: 0, vale_transporte: 0, imp_card: 0, gratuitos: 0 } },
           actual_start_time: undefined,
           actual_end_time: undefined,

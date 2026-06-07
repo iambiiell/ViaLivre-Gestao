@@ -104,9 +104,9 @@ const CityManager: React.FC<CityManagerProps> = ({ cities = [], onAddCity, onUpd
         <button onClick={() => handleOpenModal()} className="bg-blue-600 text-white px-8 py-4 rounded-2xl hover:bg-blue-700 transition-all font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 shadow-xl active:scale-95"><Plus size={20} /> Nova Cidade</button>
       </div>
 
-      <div className="flex overflow-x-auto pb-6 gap-6 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-3 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredCities.map((city) => (
-          <div key={city.id} className="min-w-[280px] sm:min-w-[320px] md:min-w-0 snap-center flex-1">
+          <div key={city.id}>
             <div className="bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-zinc-800 flex justify-between items-center hover:shadow-xl transition-all group relative overflow-hidden transition-colors h-full">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/10 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-lg shadow-inner">{city.state}</div>

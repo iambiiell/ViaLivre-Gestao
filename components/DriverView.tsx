@@ -160,20 +160,32 @@ const DriverView: React.FC<DriverViewProps> = ({
   }, [jobRole, filterDate, currentUser]);
 
   const myTrips = useMemo(() => {
+    const isUserAdmin = currentUser?.role === 'ADMIN' || (currentUser?.job_title || '').toUpperCase().includes('ADMINISTRADOR');
+
     return trips.filter(t => {
-        if (!isSupervision) {
+        if (!isUserAdmin) {
+            // Collaborators only see trips assigned to themselves across all views (including Monitoramento)
             const isAssigned = (t.driver_id === currentUser?.id || t.conductor_id === currentUser?.id);
             if (!isAssigned) return false;
+        } else {
+            // Admin only filtered by isAssigned if they aren't in supervision/monitoring mode
+            if (!isSupervision) {
+                const isAssigned = (t.driver_id === currentUser?.id || t.conductor_id === currentUser?.id);
+                if (!isAssigned) return false;
+            }
         }
         
         if (t.trip_date !== filterDate) return false;
 
-        if (jobRole === 'URBANO') return t.trip_type === 'Urbano';
-        if (jobRole === 'RODOVIARIO') return t.trip_type === 'Rodoviário';
+        // If a specific cargo tab is selected (URBANO, RODOVIARIO)
+        if (forcedRole) {
+            if (jobRole === 'URBANO') return t.trip_type === 'Urbano';
+            if (jobRole === 'RODOVIARIO') return t.trip_type === 'Rodoviário';
+        }
         
         return true;
     }).sort((a, b) => a.departure_time.localeCompare(b.departure_time));
-  }, [trips, currentUser, filterDate, routes, jobRole]);
+  }, [trips, currentUser, filterDate, routes, jobRole, forcedRole, isSupervision]);
 
   const activeTrip = useMemo(() => myTrips.find(t => t.status === 'Em Andamento' || t.status === 'Em Rota'), [myTrips]);
 
@@ -460,7 +472,12 @@ const DriverView: React.FC<DriverViewProps> = ({
               </div>
               <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">
                   <p className="text-[8px] font-black text-yellow-400 uppercase mb-1">Ponto Focal</p>
-                  <p className="text-sm font-black italic">{currentUser?.unidade || 'Central'}</p>
+                  <p className="text-sm font-black italic">
+                      {(() => {
+                          const userCompany = companies.find(c => c.id === currentUser?.company_id);
+                          return userCompany?.nome_fantasia || userCompany?.name || currentUser?.unidade || 'Central';
+                      })()}
+                  </p>
               </div>
               {(jobRole === 'URBANO' || jobRole === 'RODOVIARIO') && (
                   <div className="bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm border border-white/10">

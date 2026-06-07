@@ -474,20 +474,20 @@ const ReportManager: React.FC<ReportManagerProps> = ({ trips = [], routes = [], 
 
       {activeTab === 'revenue' && (
           <div ref={tabRevenueRef} className="space-y-6 animate-in fade-in">
-            <div className="flex overflow-x-auto pb-4 gap-4 snap-x snap-mandatory md:grid md:grid-cols-3 md:overflow-x-visible md:pb-0 md:snap-none custom-scrollbar">
-                <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border dark:border-zinc-800 shadow-sm flex items-center justify-between h-full">
                         <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Total Viagens</p><h4 className="text-2xl font-black dark:text-white">{stats.trips}</h4></div>
                         <FileText className="text-blue-500 opacity-20" size={32}/>
                     </div>
                 </div>
-                <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+                <div>
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border dark:border-zinc-800 shadow-sm flex items-center justify-between h-full">
                         <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Pax Transportado</p><h4 className="text-2xl font-black dark:text-white">{stats.pax}</h4></div>
                         <TrendingUp className="text-yellow-500 opacity-20" size={32}/>
                     </div>
                 </div>
-                <div className="min-w-[240px] md:min-w-0 snap-center flex-1">
+                <div>
                     <div className="bg-white dark:bg-zinc-900 p-6 rounded-3xl border dark:border-zinc-800 shadow-sm flex items-center justify-between h-full">
                         <div><p className="text-[9px] font-black text-slate-400 uppercase mb-1">Faturamento Líquido</p><h4 className="text-2xl font-black text-emerald-600">R$ {stats.rev.toFixed(2)}</h4></div>
                         <DollarSign className="text-emerald-500 opacity-20" size={32}/>
