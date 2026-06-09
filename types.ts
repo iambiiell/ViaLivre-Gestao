@@ -543,6 +543,7 @@ export interface PayrollRubric {
   has_conditions?: boolean;
   condition_value?: string;
   condition_symbol?: string;
+  condition_base_rubric_id?: string;
 }
 
 export interface TimeEntry {

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, PayrollRecord, Company, PayrollRubric, Occurrence } from '../types';
+import { User, PayrollRecord, Company, PayrollRubric, Occurrence, RoleConfig } from '../types';
 import { Banknote, Search, Loader2, Save, X, Calculator, Plus, Info, Trash2, Printer, CheckCircle2, UserCircle, Briefcase, FileCheck, Layers, ArrowRight, Percent, History, Download, Eye, RefreshCw } from 'lucide-react';
 import { db } from '../services/database';
 
@@ -21,6 +21,8 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [items, setItems] = useState<PayrollItem[]>([]);
   const [availableRubrics, setAvailableRubrics] = useState<PayrollRubric[]>([]);
+  const [roleConfigs, setRoleConfigs] = useState<RoleConfig[]>([]);
+  const [rubricSearch, setRubricSearch] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [refMonth, setRefMonth] = useState('03/2025');
@@ -30,16 +32,50 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
   const activeCompany = useMemo(() => companies.find(c => c.active) || companies[0], [companies]);
 
   useEffect(() => {
-    db.getRubrics().then(data => {
-      const sorted = (data || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    Promise.all([
+      db.getRubrics(),
+      db.getRoleConfigs()
+    ]).then(([rubricsData, rolesData]) => {
+      const sorted = (rubricsData || []).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
       setAvailableRubrics(sorted);
+      setRoleConfigs(rolesData || []);
     });
   }, []);
 
+  const collaboratorSalary = useMemo(() => {
+    if (!selectedUserId) return 0;
+    const user = users.find(u => u.id === selectedUserId);
+    if (!user) return 0;
+    
+    const matchedRole = roleConfigs.find(rc => 
+      rc.name.toUpperCase() === (user.job_title || '').toUpperCase() || 
+      rc.base_role === user.role
+    );
+    if (matchedRole) {
+      return matchedRole.base_salary;
+    }
+    
+    if (user.role === 'ADMIN') return 4500;
+    else if (user.role === 'RH') return 4000;
+    else if (user.role === 'MECHANIC') return 3200;
+    else if (user.role === 'FISCAL') return 3000;
+    else if (user.role === 'DRIVER') return 3500;
+    else return 2800;
+  }, [selectedUserId, users, roleConfigs]);
+
   const baseSalaryValue = useMemo(() => {
     const base = items.find(i => i.code === '001');
-    return base?.value || 0;
-  }, [items]);
+    return base?.value || collaboratorSalary || 0;
+  }, [items, collaboratorSalary]);
+
+  const filteredAvailableRubrics = useMemo(() => {
+    const cleanSearch = rubricSearch.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return availableRubrics.filter(r => {
+      const codeClean = String(r.code || '').toLowerCase();
+      const nameClean = String(r.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return codeClean.includes(cleanSearch) || nameClean.includes(cleanSearch);
+    });
+  }, [availableRubrics, rubricSearch]);
 
   const totals = useMemo(() => {
       const earnings = items.filter(i => i.type === 'EARNING').reduce((acc, i) => acc + i.value, 0);
@@ -47,28 +83,186 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
       return { earnings, deductions, net: earnings - deductions };
   }, [items]);
 
-  useEffect(() => {
-    setItems(prevItems => prevItems.map(item => {
-      if (item.rawInput?.endsWith('%')) {
-        const perc = parseFloat(item.rawInput.replace('%', '').replace(',', '.')) || 0;
-        const newValue = (perc / 100) * baseSalaryValue;
-        return { ...item, value: newValue };
+  const recalculateItems = (
+    currentItems: PayrollItem[], 
+    availableRubricsList: PayrollRubric[], 
+    colabSalary: number
+  ): PayrollItem[] => {
+    const baseItem = currentItems.find(i => i.code === '001');
+    const currentBaseSalaryValue = baseItem ? baseItem.value : colabSalary;
+
+    return currentItems.map(item => {
+      if (item.code === '001') {
+        if (item.value !== colabSalary) {
+          return { ...item, value: colabSalary, rawInput: colabSalary.toString() };
+        }
+        return item;
       }
+
+      const rubricDef = availableRubricsList.find(r => r.id === item.rubric_id || r.code === item.code);
+      if (!rubricDef) return item;
+
+      const hasConditions = rubricDef.has_conditions === true || String(rubricDef.has_conditions) === 'true';
+      if (!hasConditions) return item;
+
+      const condValStr = String(rubricDef.condition_value || '0').replace(',', '.');
+      const symbolStr = rubricDef.condition_symbol || '';
+      const parsedVal = parseFloat(condValStr) || 0;
+
+      let baseValue = currentBaseSalaryValue;
+      if (rubricDef.condition_base_rubric_id) {
+        const refItem = currentItems.find(i => i.rubric_id === rubricDef.condition_base_rubric_id);
+        if (refItem) {
+          baseValue = refItem.value;
+        } else {
+          const refRubric = availableRubricsList.find(r => r.id === rubricDef.condition_base_rubric_id);
+          if (refRubric) {
+            const refHasConditions = refRubric.has_conditions === true || String(refRubric.has_conditions) === 'true';
+            if (refHasConditions) {
+              const refCondVal = parseFloat(String(refRubric.condition_value || '0').replace(',', '.')) || 0;
+              if (refRubric.condition_symbol === '%') {
+                baseValue = (refCondVal / 100) * currentBaseSalaryValue;
+              } else {
+                baseValue = refCondVal;
+              }
+            } else if (refRubric.code === '001') {
+              baseValue = colabSalary;
+            } else {
+              baseValue = 0;
+            }
+          }
+        }
+      }
+
+      let calculatedVal = 0;
+      if (symbolStr === '%') {
+        calculatedVal = (parsedVal / 100) * baseValue;
+      } else {
+        calculatedVal = parsedVal;
+      }
+
+      const referenceText = symbolStr === '%' ? `${condValStr}%` : '30d';
+
+      if (Math.abs(item.value - calculatedVal) > 0.01 || item.reference !== referenceText) {
+        return {
+          ...item,
+          value: calculatedVal,
+          rawInput: symbolStr === '%' ? `${condValStr}%` : condValStr,
+          reference: referenceText
+        };
+      }
+
       return item;
-    }));
-  }, [baseSalaryValue]);
+    });
+  };
+
+  // Automatically calculate and populate items when a new collaborator is selected
+  useEffect(() => {
+    if (!selectedUserId || availableRubrics.length === 0) {
+      setItems([]);
+      return;
+    }
+
+    const baseRubric = availableRubrics.find(r => r.code === '001') || {
+      id: 'rubric-base',
+      code: '001',
+      name: 'SALÁRIO BASE',
+      type: 'EARNING'
+    };
+
+    const initialItems: PayrollItem[] = [
+      {
+        id: 'item-base-' + Date.now(),
+        rubric_id: baseRubric.id,
+        code: baseRubric.code,
+        description: baseRubric.name,
+        reference: '30d',
+        value: collaboratorSalary,
+        rawInput: collaboratorSalary.toString(),
+        type: 'EARNING'
+      }
+    ];
+
+    const inssRubric = availableRubrics.find(r => r.code === '501');
+    const vtRubric = availableRubrics.find(r => r.code === '550');
+
+    if (inssRubric) {
+      initialItems.push({
+        id: 'item-inss-' + Date.now(),
+        rubric_id: inssRubric.id,
+        code: inssRubric.code,
+        description: inssRubric.name,
+        reference: inssRubric.condition_symbol === '%' ? `${inssRubric.condition_value}%` : '30d',
+        value: 0,
+        rawInput: '',
+        type: 'DEDUCTION'
+      });
+    }
+
+    if (vtRubric) {
+      initialItems.push({
+        id: 'item-vt-' + Date.now(),
+        rubric_id: vtRubric.id,
+        code: vtRubric.code,
+        description: vtRubric.name,
+        reference: vtRubric.condition_symbol === '%' ? `${vtRubric.condition_value}%` : '30d',
+        value: 0,
+        rawInput: '',
+        type: 'DEDUCTION'
+      });
+    }
+
+    const calculatedInitial = recalculateItems(initialItems, availableRubrics, collaboratorSalary);
+    setItems(calculatedInitial);
+  }, [selectedUserId, availableRubrics, collaboratorSalary]);
+
+  // Keep items in sync with collaboratorSalary changes or base definition updates
+  useEffect(() => {
+    if (items.length > 0 && availableRubrics.length > 0) {
+      const fresh = recalculateItems(items, availableRubrics, collaboratorSalary);
+      
+      let changed = false;
+      for (let i = 0; i < items.length; i++) {
+        if (!fresh[i]) continue;
+        if (
+          Math.abs(items[i].value - fresh[i].value) > 0.01 || 
+          items[i].reference !== fresh[i].reference ||
+          items[i].rawInput !== fresh[i].rawInput
+        ) {
+          changed = true;
+          break;
+        }
+      }
+      
+      if (changed) {
+        setItems(fresh);
+      }
+    }
+  }, [collaboratorSalary, availableRubrics]);
 
   const addItem = (rubric: PayrollRubric) => {
       let initialRawInput = '0';
       let initialValue = 0;
 
-      if (rubric.has_conditions && rubric.condition_value && rubric.condition_symbol) {
-          initialRawInput = `${rubric.condition_value}${rubric.condition_symbol}`;
-          if (rubric.condition_symbol === '%') {
-              initialValue = (parseFloat(rubric.condition_value.replace(',', '.')) / 100) * baseSalaryValue;
+      const hasConditions = rubric.has_conditions === true || String(rubric.has_conditions) === 'true';
+
+      if (hasConditions && rubric.condition_value !== undefined && rubric.condition_value !== null) {
+          const condValStr = String(rubric.condition_value).replace(',', '.');
+          const symbolStr = rubric.condition_symbol || '';
+          initialRawInput = `${condValStr}${symbolStr}`;
+          const parsedVal = parseFloat(condValStr) || 0;
+          if (symbolStr === '%') {
+              initialValue = (parsedVal / 100) * baseSalaryValue;
           } else {
-              initialValue = parseFloat(rubric.condition_value.replace(',', '.')) || 0;
+              initialValue = parsedVal;
           }
+      }
+
+      // Evita lançamentos de códigos idênticos no mesmo holerite
+      const codeExists = items.find(i => i.code === rubric.code);
+      if (codeExists) {
+          addToast(`A rubrica [${rubric.code}] já existe neste holerite.`, "warning");
+          return;
       }
 
       const newItem: PayrollItem = {
@@ -76,12 +270,15 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
           rubric_id: rubric.id,
           code: rubric.code,
           description: rubric.name,
-          reference: '30d',
+          reference: rubric.condition_symbol === '%' ? `${rubric.condition_value}%` : '30d',
           value: initialValue,
           rawInput: initialRawInput,
           type: rubric.type
       };
-      setItems([...items, newItem]);
+
+      const newItems = [...items, newItem];
+      const recalculated = recalculateItems(newItems, availableRubrics, collaboratorSalary);
+      setItems(recalculated);
   };
 
   const removeItem = (id: string) => setItems(items.filter(i => i.id !== id));
@@ -129,7 +326,8 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
         }
       });
 
-      setItems(newItems);
+      const recalculated = recalculateItems(newItems, availableRubrics, collaboratorSalary);
+      setItems(recalculated);
       addToast(`${addedCount} ocorrências sincronizadas com sucesso.`, "success");
     } catch (error) {
       console.error(error);
@@ -140,7 +338,7 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
   };
 
   const updateItemValue = (id: string, field: 'value' | 'reference', val: string) => {
-      setItems(items.map(i => {
+      const updated = items.map(i => {
           if (i.id !== id) return i;
           
           if (field === 'reference') return { ...i, reference: val };
@@ -163,7 +361,10 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
           }
 
           return { ...i, value: numericValue, rawInput: finalInput };
-      }));
+      });
+
+      const recalculated = recalculateItems(updated, availableRubrics, collaboratorSalary);
+      setItems(recalculated);
   };
 
   const handleSaveAndGenerate = async () => {
@@ -223,23 +424,47 @@ const PayrollManager: React.FC<{ users: User[], companies: Company[], addToast: 
 
           {selectedUser && (
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in slide-in-from-bottom-4">
-                <div className="lg:col-span-1 bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border dark:border-zinc-800 shadow-sm">
-                    <h3 className="text-[10px] font-black text-black uppercase mb-6 flex items-center gap-2"><Layers size={14}/> Eventos de Rubricas</h3>
-                    <div className="space-y-1 max-h-[500px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="lg:col-span-1 bg-white dark:bg-zinc-900 p-6 rounded-[2.5rem] border dark:border-zinc-800 shadow-sm flex flex-col">
+                    <h3 className="text-[10px] font-black text-black uppercase mb-4 flex items-center gap-2"><Layers size={14}/> Eventos de Rubricas</h3>
+                    
+                    <div className="relative mb-4">
+                        <Search className="absolute left-3.5 top-3.5 text-slate-400" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar código ou nome..." 
+                            className="w-full pl-10 pr-8 py-3 rounded-xl bg-slate-50 dark:bg-zinc-950 border-2 border-yellow-400/20 text-[10px] font-black uppercase outline-none dark:text-zinc-300 shadow-inner transition-all focus:border-yellow-400" 
+                            value={rubricSearch} 
+                            onChange={e => setRubricSearch(e.target.value)} 
+                        />
+                        {rubricSearch && (
+                            <button 
+                                onClick={() => setRubricSearch('')}
+                                className="absolute right-3 top-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                                <X size={14} />
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="space-y-1 max-h-[500px] overflow-y-auto custom-scrollbar pr-2 flex-1">
                         {availableRubrics.length === 0 ? (
                             <div className="p-4 text-center">
                                 <p className="text-[8px] font-black text-slate-400 uppercase">Carregando dicionário...</p>
                             </div>
+                        ) : filteredAvailableRubrics.length === 0 ? (
+                            <div className="p-4 text-center">
+                                <p className="text-[8px] font-black text-slate-400 uppercase">Nenhuma rubrica localizada.</p>
+                            </div>
                         ) : (
-                            availableRubrics.map((rub, idx) => (
+                            filteredAvailableRubrics.map((rub, idx) => (
                                 <button 
                                     key={rub.id || idx} 
                                     onClick={() => addItem(rub)}
                                     className="w-full text-left p-3 rounded-xl border border-transparent hover:border-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/10 transition-all group"
                                 >
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-[10px] font-black text-slate-900 dark:text-white bg-slate-100 dark:bg-zinc-800 px-2 py-1 rounded-lg group-hover:bg-yellow-400 group-hover:text-slate-900">{rub.code}</span>
-                                        <span className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase leading-tight group-hover:text-yellow-600">{rub.name}</span>
+                                    <div className="flex items-center gap-3 w-full overflow-hidden">
+                                        <span className="text-[10px] font-black text-slate-900 dark:text-white bg-slate-100 dark:bg-zinc-800 px-2 py-1 rounded-lg group-hover:bg-yellow-400 group-hover:text-slate-900 shrink-0">{rub.code}</span>
+                                        <span className="text-[8px] font-bold text-slate-500 dark:text-zinc-400 uppercase whitespace-nowrap truncate leading-none group-hover:text-yellow-600">{rub.name}</span>
                                     </div>
                                 </button>
                             ))

@@ -236,10 +236,12 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
   };
 
   const filteredRubrics = useMemo(() => {
-    return rubrics.filter(r => 
-        r.code.includes(searchTerm) || 
-        r.name.toLowerCase().includes(searchTerm.toLowerCase())
-    ).sort((a,b) => a.name.localeCompare(b.name));
+    const cleanSearch = searchTerm.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return rubrics.filter(r => {
+      const codeClean = String(r.code || '').toLowerCase();
+      const nameClean = String(r.name || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return codeClean.includes(cleanSearch) || nameClean.includes(cleanSearch);
+    }).sort((a,b) => a.name.localeCompare(b.name));
   }, [rubrics, searchTerm]);
 
   return (
@@ -611,6 +613,24 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
                                 onChange={e => setEditingRubric({...editingRubric, condition_symbol: e.target.value})}
                                 placeholder="Ex: %"
                               />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-1 ml-2">Calcular Condição sobre Qual Rubrica?</label>
+                              <select 
+                                className="w-full px-4 py-3 bg-slate-50 dark:bg-zinc-900 border-2 border-yellow-400/20 rounded-xl font-black outline-none focus:border-yellow-400 dark:text-white" 
+                                value={editingRubric?.condition_base_rubric_id || ''} 
+                                onChange={e => setEditingRubric({...editingRubric, condition_base_rubric_id: e.target.value || undefined})}
+                              >
+                                <option value="">[SALÁRIO BASE DO COLABORADOR]</option>
+                                {rubrics
+                                  .filter(r => r.id !== editingRubric?.id)
+                                  .map(rub => (
+                                    <option key={rub.id} value={rub.id}>
+                                      [{rub.code}] {rub.name} ({rub.type === 'EARNING' ? 'Provento' : rub.type === 'DEDUCTION' ? 'Desconto' : 'Informativo'})
+                                    </option>
+                                  ))
+                                }
+                              </select>
                             </div>
                           </div>
                         )}
