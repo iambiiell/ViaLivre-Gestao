@@ -11,7 +11,8 @@ import {
   Fingerprint,
   RefreshCw,
   ExternalLink,
-  UserCircle
+  UserCircle,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ActivationKey, User } from '../types';
@@ -19,13 +20,14 @@ import { db } from '../services/database';
 
 interface LicenseManagementProps {
   currentUser: User | null;
-  addToast: (message: string, type: 'success' | 'error' | 'warning') => void;
+  addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
 const LicenseManagement: React.FC<LicenseManagementProps> = ({ currentUser, addToast }) => {
   const [keys, setKeys] = useState<ActivationKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     fetchKeys();
@@ -41,6 +43,21 @@ const LicenseManagement: React.FC<LicenseManagementProps> = ({ currentUser, addT
       addToast('Erro ao carregar gestão de licenças', 'error');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteKey = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta chave cadastrada?')) return;
+    setIsDeleting(id);
+    try {
+      await db.delete('activation_keys', id);
+      addToast('Chave de ativação excluída com sucesso!', 'success');
+      fetchKeys();
+    } catch (error) {
+      console.error('Error deleting key:', error);
+      addToast('Erro ao excluir chave cadastrada.', 'error');
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -102,6 +119,7 @@ const LicenseManagement: React.FC<LicenseManagementProps> = ({ currentUser, addT
                 <th className="px-8 py-4 text-[10px] font-black uppercase text-black tracking-widest">E-mail</th>
                 <th className="px-8 py-4 text-[10px] font-black uppercase text-black tracking-widest">Data Ativação</th>
                 <th className="px-8 py-4 text-[10px] font-black uppercase text-black tracking-widest">System ID</th>
+                <th className="px-8 py-4 text-[10px] font-black uppercase text-black tracking-widest">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-zinc-800">
@@ -159,6 +177,20 @@ const LicenseManagement: React.FC<LicenseManagementProps> = ({ currentUser, addT
                           {key.activated_by_system_id || '---'}
                         </span>
                       </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <button 
+                        onClick={() => handleDeleteKey(key.id)}
+                        disabled={isDeleting === key.id}
+                        className="p-2 text-slate-400 hover:text-red-500 transition-all active:scale-95 disabled:opacity-50"
+                        title="Excluir Chave"
+                      >
+                        {isDeleting === key.id ? (
+                          <RefreshCw size={16} className="animate-spin text-red-500" />
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
+                      </button>
                     </td>
                   </motion.tr>
                 ))}

@@ -525,6 +525,7 @@ const App: React.FC = () => {
   const [skins, setSkins] = useState<Skin[]>([]);
   const [showTutorial, setShowTutorial] = useState(false);
   const [isClockedIn, setIsClockedIn] = useState<boolean | null>(null);
+  const [githubUpdateVersion, setGithubUpdateVersion] = useState<string | null>(null);
 
   const debounceTimers = useRef<Record<string, number>>({});
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -646,6 +647,57 @@ const App: React.FC = () => {
     else root.classList.remove('dark');
     localStorage.setItem('fluxo_theme', themeMode);
   }, [themeMode]);
+
+  const checkGithubVersion = useCallback(async () => {
+    // 1. Check if there is a simulated version in localStorage
+    const simulatedVersion = localStorage.getItem('vialivre_simulated_github_update');
+    if (simulatedVersion) {
+      if (simulatedVersion === 'NONE') {
+        setGithubUpdateVersion(null);
+      } else {
+        setGithubUpdateVersion(simulatedVersion);
+      }
+      return;
+    }
+
+    // 2. Query actual GitHub releases endpoint
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch('https://api.github.com/repos/vianicolausa/ViaLivre-Gestao/releases/latest', {
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        const latestTag = data.tag_name;
+        // current app version is v2.0 as hardcoded in UI and About section
+        if (latestTag && latestTag !== 'v2.0') {
+          setGithubUpdateVersion(latestTag);
+        } else {
+          setGithubUpdateVersion(null);
+        }
+      }
+    } catch (e) {
+      console.warn('Falha silenciosa ao verificar atualizações do GitHub:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkGithubVersion();
+    // check again every 3 minutes
+    const interval = setInterval(checkGithubVersion, 180000);
+    return () => clearInterval(interval);
+  }, [checkGithubVersion]);
+
+  useEffect(() => {
+    const handleCheckUpdate = () => {
+      checkGithubVersion();
+    };
+    window.addEventListener('vialivre-check-github-update', handleCheckUpdate);
+    return () => window.removeEventListener('vialivre-check-github-update', handleCheckUpdate);
+  }, [checkGithubVersion]);
 
   useEffect(() => {
     const requestNotifications = async () => {
@@ -1398,6 +1450,45 @@ const App: React.FC = () => {
         />
         
         <main key={currentView} className={`w-full ${isMobile ? 'pt-16 px-4' : 'pt-18 px-8'} h-full transition-all pb-44 md:pb-24`}>
+          <AnimatePresence>
+            {githubUpdateVersion && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginBottom: 24 }}
+                exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-slate-950 dark:bg-zinc-900 border-2 border-yellow-400 rounded-3xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl relative overflow-hidden">
+                  <div className="flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-yellow-400 flex items-center justify-center text-slate-950 shrink-0 shadow-lg relative">
+                      <RefreshCw size={22} className="animate-spin text-slate-900" style={{ animationDuration: '4s' }} />
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                      </span>
+                    </div>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[9px] bg-yellow-400 text-slate-950 font-black uppercase tracking-widest px-2.5 py-1 rounded-lg leading-none">ATUALIZAÇÃO DISPONÍVEL</span>
+                        <p className="text-sm font-black text-white uppercase tracking-wider">Nova Versão no GitHub: {githubUpdateVersion}</p>
+                      </div>
+                      <p className="text-xs text-slate-300 font-bold uppercase tracking-widest mt-1.5 leading-relaxed max-w-2xl">
+                        Uma nova atualização de software do sistema foi detectada no repositório. Solicita-se que o usuário atualize a página para recarregar o sistema com os últimos patches e melhorias.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="w-full md:w-auto px-8 py-4 bg-yellow-400 text-slate-950 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-yellow-300 transition-all hover:scale-[1.03] active:scale-95 shrink-0"
+                  >
+                    Atualizar Agora (Recarregar)
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
           <ViewContent currentView={currentView as ViewState} commonProps={commonProps} handleAction={handleAction} />
         </main>
 

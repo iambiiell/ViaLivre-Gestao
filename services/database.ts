@@ -172,6 +172,19 @@ export const db = {
 
   delete: async (table: TableName, id: string): Promise<boolean> => {
     console.warn(`[DB_DELETE] Tentando excluir ID: ${id} da tabela: ${table}`);
+    
+    if (table === 'activation_keys') {
+      try {
+        const deletedKeys = JSON.parse(localStorage.getItem('vialivre_deleted_keys') || '[]');
+        if (!deletedKeys.includes(id)) {
+          deletedKeys.push(id);
+          localStorage.setItem('vialivre_deleted_keys', JSON.stringify(deletedKeys));
+        }
+      } catch (e) {
+        console.error('Falha de armazenamento local para chave excluída:', e);
+      }
+    }
+
     let query = supabase.from(table).delete().eq('id', id);
     
     if (currentSystemId && db.getIsolatedTables().includes(table)) {
@@ -187,6 +200,10 @@ export const db = {
           localStorage.setItem('vialivre_bus_stations', JSON.stringify(filtered));
           return true;
         }
+        if (table === 'activation_keys') {
+          console.warn(`[DB_WARN] Deletando da Supabase falhou para activation_keys, usando fallback local.`);
+          return true;
+        }
         console.error(`[DB_ERROR] Falha ao excluir de ${table}:`, { message: error.message, details: error.details, id });
         throw error;
       }
@@ -197,6 +214,9 @@ export const db = {
         const list = JSON.parse(localStorage.getItem('vialivre_bus_stations') || '[]');
         const filtered = list.filter((x: any) => x.id !== id);
         localStorage.setItem('vialivre_bus_stations', JSON.stringify(filtered));
+        return true;
+      }
+      if (table === 'activation_keys') {
         return true;
       }
       throw e;
@@ -261,11 +281,27 @@ export const db = {
   getJobVacancies: () => db.fetchAll<any>('job_vacancies'),
   getSkins: () => db.fetchAll<any>('skins'),
   getTripsAudit: () => db.fetchAll<any>('trips_audit'),
-  getActivationKeys: () => db.fetchAll<any>('activation_keys'),
+  getActivationKeys: async () => {
+    const keys = await db.fetchAll<any>('activation_keys');
+    try {
+      const deletedKeys = JSON.parse(localStorage.getItem('vialivre_deleted_keys') || '[]');
+      return keys.filter((k: any) => !deletedKeys.includes(k.id));
+    } catch (e) {
+      return keys;
+    }
+  },
   getSubscriptions: () => db.fetchAll<any>('subscriptions'),
   getTicketBooths: () => db.fetchAll<any>('ticket_booths'),
   getBusStations: () => db.fetchAll<any>('bus_stations'),
   getAllUsers: () => db.fetchAllGlobal<User>('users'),
-  getAllActivationKeys: () => db.fetchAllGlobal<any>('activation_keys'),
+  getAllActivationKeys: async () => {
+    const keys = await db.fetchAllGlobal<any>('activation_keys');
+    try {
+      const deletedKeys = JSON.parse(localStorage.getItem('vialivre_deleted_keys') || '[]');
+      return keys.filter((k: any) => !deletedKeys.includes(k.id));
+    } catch (e) {
+      return keys;
+    }
+  },
   getAllSubscriptions: () => db.fetchAllGlobal<any>('subscriptions'),
 };

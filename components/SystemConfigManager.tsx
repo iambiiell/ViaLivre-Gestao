@@ -245,6 +245,95 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
           </div>
         </div>
 
+        {/* GitHub System Updates Simulator */}
+        <div className="bg-white dark:bg-zinc-900 rounded-[3rem] border-2 border-slate-100 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors mb-8 animate-in fade-in slide-in-from-bottom-3 duration-500">
+          <div className="p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
+            <div className="flex items-center gap-3">
+              <RefreshCw className="text-yellow-500 animate-spin" style={{ animationDuration: '6s' }} size={24} />
+              <h3 className="text-lg font-black uppercase italic tracking-tighter">Atualizações do Sistema (GitHub)</h3>
+            </div>
+          </div>
+          <div className="p-8 space-y-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 p-6 bg-slate-50 dark:bg-zinc-800/45 rounded-3xl border border-slate-100 dark:border-zinc-800">
+              <div className="space-y-1">
+                <h4 className="text-sm font-black uppercase text-slate-900 dark:text-zinc-100">
+                  Verificação de Nova Versão
+                </h4>
+                <p className="text-[10px] font-bold text-slate-500 dark:text-zinc-400 uppercase italic leading-normal max-w-xl">
+                  O sistema monitora automaticamente o canal de releases no GitHub para notificar os operadores sobre novos updates importantes em tempo real.
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Versão Atual do Cliente</span>
+                <span className="px-3.5 py-1.5 bg-zinc-100 dark:bg-zinc-800 text-[10px] font-black text-slate-700 dark:text-zinc-300 rounded-full border border-slate-200 dark:border-zinc-700">
+                  v2.0
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4 border-t border-slate-100 dark:border-zinc-800/60">
+              <div className="space-y-3">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Simular Publicação de Nova Versão</label>
+                <p className="text-[9px] font-bold text-slate-400 uppercase italic">Para testar o aviso do sistema de imediato, selecione uma versão fictícia para simular uma nova atualização no GitHub.</p>
+                
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {[
+                    { id: 'v2.1', label: 'Simular v2.1' },
+                    { id: 'v2.5', label: 'Simular v2.5' },
+                    { id: 'v3.0', label: 'Simular v3.0 (Major)' },
+                    { id: 'NONE', label: 'Desativar Simulação' },
+                  ].map((opt) => {
+                    const currentSim = localStorage.getItem('vialivre_simulated_github_update') || 'NONE';
+                    const isSelected = currentSim === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          if (opt.id === 'NONE') {
+                            localStorage.removeItem('vialivre_simulated_github_update');
+                            addToast('Simulação desativada. Verificação real do GitHub reestabelecida.', 'success');
+                          } else {
+                            localStorage.setItem('vialivre_simulated_github_update', opt.id);
+                            addToast(`Simulação ativada! Chave de versão fictícia configurada para ${opt.id}.`, 'success');
+                          }
+                          // trigger update check custom event
+                          window.dispatchEvent(new CustomEvent('vialivre-check-github-update'));
+                        }}
+                        className={`px-4 py-3 rounded-xl text-[9px] font-black uppercase transition-all border-2 ${
+                          isSelected
+                            ? 'bg-yellow-400 border-slate-900 text-slate-900 shadow-md scale-102 font-black'
+                            : 'bg-transparent border-slate-100 dark:border-zinc-800 text-slate-400 hover:border-slate-200'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="block text-[10px] font-black uppercase text-slate-400 tracking-widest leading-none">Canal de Configuração Técnica</label>
+                <div className="p-4 bg-slate-950 rounded-2xl border border-slate-900 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-[9px] font-black text-yellow-400 uppercase tracking-widest">Repositório Alvo</p>
+                    <p className="text-[10px] font-mono text-zinc-400 break-all leading-none">vianicolausa/ViaLivre-Gestao</p>
+                  </div>
+                  <a 
+                    href="https://github.com/vianicolausa/ViaLivre-Gestao" 
+                    target="_blank" 
+                    rel="no-referrer"
+                    className="p-3 bg-zinc-800 text-zinc-300 rounded-xl hover:bg-zinc-700 transition-all text-[9px] font-black uppercase tracking-wider shrink-0"
+                  >
+                    Ver GitHub
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
 
         <div className="bg-white dark:bg-zinc-900 rounded-[3rem] border-2 border-slate-100 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors mb-8">
           <div className="p-8 border-b dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900">
