@@ -25,8 +25,9 @@ import {
   Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ActivationKey, Subscription, User } from '../types';
+import { ActivationKey, Subscription, User, AppNotification } from '../types';
 import { db } from '../services/database';
+import { MockNotificationService } from '../services/MockNotificationService';
 
 interface SubscriptionManagerProps {
   currentUser: User | null;
@@ -58,13 +59,21 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
   // Form state for new key
   const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[number]['type']>('MONTHLY');
   const [customMonths, setCustomMonths] = useState<number>(1);
+  const [customDays, setCustomDays] = useState<number>(30);
+  const [customDurationType, setCustomDurationType] = useState<'MONTHS' | 'DAYS'>('MONTHS');
   const [customPrice, setCustomPrice] = useState<number>(199.00);
 
   useEffect(() => {
     const plan = PLANS.find(p => p.type === selectedPlan);
     if (plan) {
       setCustomPrice(plan.price);
-      setCustomMonths(plan.months);
+      if (plan.type === 'TRIAL') {
+        setCustomDurationType('DAYS');
+        setCustomDays(7);
+      } else {
+        setCustomDurationType('MONTHS');
+        setCustomMonths(plan.months);
+      }
     }
   }, [selectedPlan]);
 
@@ -75,16 +84,85 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      const [keysData, usersData] = await Promise.all([
+      const [keysData, usersData, subsData, notifsData] = await Promise.all([
         db.getAllActivationKeys(),
-        db.getAllUsers()
+        db.getAllUsers(),
+        db.getSubscriptions(),
+        db.getNotifications()
       ]);
       
       const kData = keysData || [];
       const uData = usersData || [];
+      const sData = subsData || [];
+      const nData = notifsData || [];
       
       setKeys(kData);
       setAllUsers(uData);
+
+      // check for licenses expiring in 3 days
+      const activeSub = sData.find(s => s.status === 'ACTIVE') || sData[0];
+      if (activeSub && activeSub.expires_at) {
+        const expirationDate = new Date(activeSub.expires_at);
+        const today = new Date();
+        
+        // Zero out the time components for day accuracy
+        today.setHours(0, 0, 0, 0);
+        const expZeroDate = new Date(expirationDate);
+        expZeroDate.setHours(0, 0, 0, 0);
+        
+        const diffTime = expZeroDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        const reminderTitle = `⚠️ Alerta: Sua licença expira em 3 dias!`;
+        const alreadyNotified = nData.some(
+          n => n.title === reminderTitle && n.message.includes(activeSub.expires_at.split('T')[0] || '')
+        );
+
+        if (diffDays === 3 && !alreadyNotified) {
+          const adminUsers = uData.filter(u => u.role === 'ADMIN');
+          
+          for (const admin of adminUsers) {
+            const systemNotifId = Math.random().toString(36).substring(2, 11);
+            
+            // Create in-app app notification for this admin
+            await db.create<AppNotification>('notifications', {
+              id: systemNotifId,
+              system_id: admin.system_id || activeSub.system_id,
+              user_id: admin.id,
+              title: reminderTitle,
+              message: `Atenção Administrador. A licença de uso do sistema ViaLivre para a contratante atual está agendada para expirar em 3 dias (Vencimento: ${new Date(activeSub.expires_at).toLocaleDateString('pt-BR')}). Por favor, providencie a renovação inserindo uma chave válida.`,
+              type: 'WARNING',
+              category: 'SYSTEM',
+              target_role: 'ADMIN',
+              is_read: false,
+              created_at: new Date().toISOString(),
+              metadata: {
+                sender_service: 'SubscriptionExpirationReminder',
+                expires_at: activeSub.expires_at,
+                subscription_id: activeSub.id
+              }
+            });
+            
+            // Send simulated email
+            if (admin.email) {
+              await MockNotificationService.sendEmail(
+                admin.email,
+                `[ViaLivre] Alerta de Vencimento de Licença`,
+                `Olá, ${admin.full_name || admin.name || 'Administrador'}.\n\nEste é um aviso de que a sua licença de uso da plataforma ViaLivre expira em de 3 dias (em ${new Date(activeSub.expires_at).toLocaleDateString('pt-BR')}).\n\nAbra o painel de Gerenciamento de Licenças e insira uma nova chave de ativação para evitar interrupção dos serviços.`
+              );
+            }
+            
+            // Send simulated push alert
+            await MockNotificationService.sendPush(
+              admin.id,
+              reminderTitle,
+              `Sua licença ViaLivre expira em 3 dias (${new Date(activeSub.expires_at).toLocaleDateString('pt-BR')}). Renove agora para evitar interrupções.`
+            );
+          }
+          
+          addToast('Aviso enviado aos administradores: Licença expira em 3 dias!', 'warning');
+        }
+      }
 
       // Seed sample data if keys are empty
       if (kData.length === 0 && !isLoading) {
@@ -115,7 +193,9 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
         key_code: `VL-${Math.random().toString(36).substring(2, 10).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`,
         plan_type: selectedPlan,
         price: customPrice,
-        duration_months: customMonths,
+        duration_months: customDurationType === 'MONTHS' ? customMonths : 0,
+        duration_type: customDurationType,
+        duration_days: customDurationType === 'DAYS' ? customDays : undefined,
         is_used: false,
         created_at: new Date().toISOString()
       };
@@ -355,11 +435,25 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
               </div>
 
               <div className="flex items-center gap-2 bg-slate-100 dark:bg-zinc-800 p-1.5 rounded-2xl">
-                <span className="text-[9px] font-black uppercase text-slate-400 px-2">Meses:</span>
+                <select 
+                  value={customDurationType}
+                  onChange={e => setCustomDurationType(e.target.value as 'MONTHS' | 'DAYS')}
+                  className="bg-transparent text-[9px] font-black uppercase text-slate-400 px-2 border-none outline-none cursor-pointer"
+                >
+                  <option value="MONTHS">Meses:</option>
+                  <option value="DAYS">Dias:</option>
+                </select>
                 <input 
                   type="number"
-                  value={customMonths}
-                  onChange={e => setCustomMonths(parseInt(e.target.value))}
+                  value={customDurationType === 'MONTHS' ? customMonths : customDays}
+                  onChange={e => {
+                    const val = parseInt(e.target.value) || 0;
+                    if (customDurationType === 'MONTHS') {
+                      setCustomMonths(val);
+                    } else {
+                      setCustomDays(val);
+                    }
+                  }}
                   className="w-16 bg-white dark:bg-zinc-700 border-none rounded-xl px-2 py-2 text-[10px] font-black text-center outline-none"
                 />
               </div>
@@ -455,9 +549,12 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
                       </td>
                       <td className="px-8 py-6">
                         <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                          {key.plan_type === 'TRIAL' ? '7 Dias' : 
-                          key.duration_months === 999 ? 'Vitalício' : 
-                          `${key.duration_months || getMonths(key.plan_type)} ${(key.duration_months || getMonths(key.plan_type)) === 1 ? 'Mês' : 'Meses'}`}
+                          {key.duration_type === 'DAYS' ? 
+                            `${key.duration_days} ${key.duration_days === 1 ? 'Dia' : 'Dias'}` :
+                           (key.plan_type === 'TRIAL' ? '7 Dias' : 
+                            key.duration_months === 999 ? 'Vitalício' : 
+                            `${key.duration_months || getMonths(key.plan_type)} ${(key.duration_months || getMonths(key.plan_type)) === 1 ? 'Mês' : 'Meses'}`)
+                          }
                         </span>
                       </td>
                       <td className="px-8 py-6">
@@ -667,7 +764,7 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Plano</label>
                     <select 
@@ -679,7 +776,9 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
                           ...editingKey, 
                           plan_type: type, 
                           price: plan?.price || editingKey.price,
-                          duration_months: plan?.months || editingKey.duration_months
+                          duration_months: type === 'TRIAL' ? 0 : (plan?.months || editingKey.duration_months),
+                          duration_type: type === 'TRIAL' ? 'DAYS' : 'MONTHS',
+                          duration_days: type === 'TRIAL' ? 7 : undefined
                         });
                       }}
                       className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 border-none rounded-2xl font-bold outline-none focus:ring-2 ring-blue-400 transition-all appearance-none"
@@ -690,11 +789,38 @@ const SubscriptionManager: React.FC<SubscriptionManagerProps> = ({ currentUser, 
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Duração (Meses - 999 para Vitalício)</label>
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Tipo Duração</label>
+                    <select 
+                      value={editingKey.duration_type || 'MONTHS'}
+                      onChange={e => {
+                        const type = e.target.value as 'MONTHS' | 'DAYS';
+                        setEditingKey({
+                          ...editingKey, 
+                          duration_type: type,
+                          duration_days: type === 'DAYS' ? (editingKey.duration_days || 30) : undefined
+                        });
+                      }}
+                      className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 border-none rounded-2xl font-bold outline-none focus:ring-2 ring-blue-400 transition-all appearance-none"
+                    >
+                      <option value="MONTHS">Meses</option>
+                      <option value="DAYS">Dias</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-400 ml-2">
+                      {(editingKey.duration_type || 'MONTHS') === 'MONTHS' ? 'Duração (Meses)' : 'Duração (Dias)'}
+                    </label>
                     <input 
                       type="number"
-                      value={editingKey.duration_months || 0}
-                      onChange={e => setEditingKey({...editingKey, duration_months: parseInt(e.target.value)})}
+                      value={(editingKey.duration_type || 'MONTHS') === 'MONTHS' ? (editingKey.duration_months || 0) : (editingKey.duration_days || 0)}
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 0;
+                        if ((editingKey.duration_type || 'MONTHS') === 'MONTHS') {
+                          setEditingKey({...editingKey, duration_months: val, duration_days: undefined});
+                        } else {
+                          setEditingKey({...editingKey, duration_days: val, duration_months: 0});
+                        }
+                      }}
                       className="w-full px-6 py-4 bg-slate-50 dark:bg-zinc-800 border-none rounded-2xl font-bold outline-none focus:ring-2 ring-blue-400 transition-all"
                     />
                   </div>

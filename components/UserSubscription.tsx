@@ -65,7 +65,6 @@ const UserSubscription: React.FC<UserSubscriptionProps> = ({ currentUser, addToa
         return;
       }
 
-      const durationMonths = key.duration_months || 1;
       let expiresAt = new Date();
       
       // If there is an active sub, extend it. Otherwise start from now.
@@ -73,10 +72,16 @@ const UserSubscription: React.FC<UserSubscriptionProps> = ({ currentUser, addToa
         expiresAt = new Date(subscription.expires_at);
       }
 
-      if (durationMonths === 999) {
-        expiresAt = new Date(2099, 11, 31, 23, 59, 59);
+      if (key.duration_type === 'DAYS') {
+        const durationDays = key.duration_days || 30;
+        expiresAt.setDate(expiresAt.getDate() + durationDays);
       } else {
-        expiresAt = addMonths(expiresAt, durationMonths);
+        const durationMonths = key.duration_months || 1;
+        if (durationMonths === 999) {
+          expiresAt = new Date(2099, 11, 31, 23, 59, 59);
+        } else {
+          expiresAt = addMonths(expiresAt, durationMonths);
+        }
       }
 
       const expiresAtISO = expiresAt.toISOString();
@@ -127,9 +132,11 @@ const UserSubscription: React.FC<UserSubscriptionProps> = ({ currentUser, addToa
         });
       }
 
-      const successMsg = durationMonths === 999 
-        ? 'Sua assinatura Vitalícia foi ativada com sucesso!'
-        : `Sua assinatura de ${durationMonths} meses foi ativada com sucesso!`;
+      const successMsg = key.duration_type === 'DAYS'
+        ? `Sua assinatura de ${key.duration_days || 30} dias foi ativada com sucesso!`
+        : (key.duration_months === 999 
+          ? 'Sua assinatura Vitalícia foi ativada com sucesso!'
+          : `Sua assinatura de ${key.duration_months || 1} meses foi ativada com sucesso!`);
       
       addToast(successMsg, 'success');
       setActivationKey('');

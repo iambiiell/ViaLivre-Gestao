@@ -77,17 +77,18 @@ const SystemConfigManager: React.FC<SystemConfigManagerProps> = ({ addToast }) =
         activated_by_system_id: db.getSystemId()
       });
 
-      const durationMap: Record<string, number> = {
-        'MONTHLY': 30,
-        'QUARTERLY': 90,
-        'SEMI_ANNUAL': 180,
-        'ANNUAL': 365,
-        'LIFETIME': 36500
-      };
-      
-      const duration = durationMap[key.plan_type] || 30;
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + duration);
+      let expiresAt = new Date();
+      if (key.duration_type === 'DAYS') {
+        const durationDays = key.duration_days || 30;
+        expiresAt.setDate(expiresAt.getDate() + durationDays);
+      } else {
+        const durationMonths = key.duration_months || (key.plan_type === 'LIFETIME' ? 120 : key.plan_type === 'ANNUAL' ? 12 : key.plan_type === 'SEMI_ANNUAL' ? 6 : key.plan_type === 'QUARTERLY' ? 3 : 1);
+        if (durationMonths === 999) {
+          expiresAt = new Date(2099, 11, 31, 23, 59, 59);
+        } else {
+          expiresAt.setMonth(expiresAt.getMonth() + durationMonths);
+        }
+      }
 
       const newSub: Partial<Subscription> = {
         system_id: db.getSystemId()!,

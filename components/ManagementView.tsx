@@ -54,6 +54,10 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
   const [editingRubric, setEditingRubric] = useState<Partial<PayrollRubric> | null>(null);
   const [editingRole, setEditingRole] = useState<Partial<RoleConfig> | null>(null);
 
+  const allowedViews = useMemo(() => {
+    return ACCESSIBLE_VIEWS.filter(v => v !== 'subscriptions' || currentUser?.email === 'via.nicolau.sa@gmail.com');
+  }, [currentUser]);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -470,30 +474,30 @@ const ManagementView: React.FC<{ addToast: (m: string, t?: any) => void; current
                           </div>
                       </div>
 
-                      <div>
+                       <div>
                           <label className="block text-[10px] font-black text-slate-400 uppercase mb-4 ml-2">Permissões de Acesso (Abas do Sistema)</label>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                               <button 
                                 type="button"
                                 onClick={() => {
-                                    const allSelected = ACCESSIBLE_VIEWS.every(v => editingRole?.permissions?.includes(v));
+                                    const allSelected = allowedViews.every(v => editingRole?.permissions?.includes(v));
                                     if (allSelected) {
                                         setEditingRole({...editingRole, permissions: []});
                                     } else {
-                                        setEditingRole({...editingRole, permissions: [...ACCESSIBLE_VIEWS]});
+                                        setEditingRole({...editingRole, permissions: [...allowedViews]});
                                     }
                                 }}
                                 className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
-                                    ACCESSIBLE_VIEWS.every(v => editingRole?.permissions?.includes(v))
+                                    allowedViews.every(v => editingRole?.permissions?.includes(v))
                                         ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-900 dark:text-indigo-200'
                                         : 'border-dashed border-slate-300 dark:border-zinc-700 text-slate-500 dark:text-zinc-400 font-bold'
                                 }`}
                               >
-                                  {ACCESSIBLE_VIEWS.every(v => editingRole?.permissions?.includes(v)) ? <CheckSquare size={16} className="text-indigo-600 dark:text-indigo-400"/> : <Square size={16}/>}
+                                  {allowedViews.every(v => editingRole?.permissions?.includes(v)) ? <CheckSquare size={16} className="text-indigo-600 dark:text-indigo-400"/> : <Square size={16}/>}
                                   <span className="text-[9px] font-black uppercase truncate">TODAS AS ABAS</span>
                               </button>
 
-                              {ACCESSIBLE_VIEWS.map(view => {
+                              {allowedViews.map(view => {
                                   const isSelected = editingRole?.permissions?.includes(view);
                                   return (
                                       <button 

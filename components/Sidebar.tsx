@@ -77,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout, 
     }
 
     if (item.id === 'subscriptions') {
-      return !!currentUser?.is_full_admin || isMasterEmail;
+      return currentUser?.email === 'via.nicolau.sa@gmail.com';
     }
 
     if (item.id === 'my-subscription') {

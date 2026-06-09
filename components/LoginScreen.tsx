@@ -89,8 +89,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onRegister, onPassen
           return;
       }
 
-      if (regActivationKey.length !== 20) {
-          setErrorModal("Chave de ativação deve ter exatamente 20 caracteres.");
+      const isMasterKey = regActivationKey.trim().toUpperCase() === 'MASTER-2024-TEST-KEY';
+      const keyPattern = /^VL-[A-Z0-9]{8}-[A-Z0-9]{4}$/i;
+      if (!isMasterKey && !keyPattern.test(regActivationKey.trim())) {
+          setErrorModal("A chave de ativação deve estar no padrão VL-00000000-0000 (ex: VL-XXXXXXXX-XXXX)");
           return;
       }
 
@@ -143,13 +145,17 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onRegister, onPassen
             });
 
             // Initialize Subscription
-            const durationMonths = validKey.duration_months || 1;
             let expiresAt = new Date();
-            
-            if (durationMonths === 999) {
-                expiresAt = new Date(2099, 11, 31, 23, 59, 59);
+            if (validKey.duration_type === 'DAYS') {
+                const durationDays = validKey.duration_days || 30;
+                expiresAt.setDate(expiresAt.getDate() + durationDays);
             } else {
-                expiresAt = addMonths(expiresAt, durationMonths);
+                const durationMonths = validKey.duration_months || 1;
+                if (durationMonths === 999) {
+                    expiresAt = new Date(2099, 11, 31, 23, 59, 59);
+                } else {
+                    expiresAt = addMonths(expiresAt, durationMonths);
+                }
             }
 
             const expiresAtISO = expiresAt.toISOString();
@@ -298,7 +304,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onRegister, onPassen
                     <KeyRound className="absolute left-5 top-5 text-slate-300 dark:text-zinc-700" size={20} />
                     <input 
                       required 
-                      placeholder="CHAVE DE ATIVAÇÃO" 
+                      placeholder="CHAVE DE ATIVAÇÃO (VL-00000000-0000)" 
                       value={regActivationKey || ''} 
                       onChange={e => setRegActivationKey(e.target.value.toUpperCase().substring(0, 20))} 
                       className="w-full pl-14 pr-4 py-4 border-2 border-slate-50 dark:border-zinc-800 rounded-2xl bg-slate-50 dark:bg-zinc-900 text-slate-900 dark:text-zinc-100 font-bold outline-none focus:border-yellow-400 transition-all text-[1.2rem]" 
@@ -317,7 +323,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, onRegister, onPassen
                         </button>
                     </div>
                 </div>
-                <button disabled={isLoading || regActivationKey.length !== 20} type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all transition-colors disabled:opacity-50">
+                <button disabled={isLoading || !regActivationKey.trim()} type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 active:scale-95 transition-all transition-colors disabled:opacity-50">
                     {isLoading ? <Loader2 className="animate-spin" size={18}/> : <UserPlus size={18}/>}
                     CRIAR ACESSO
                 </button>

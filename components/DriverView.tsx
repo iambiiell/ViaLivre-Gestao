@@ -70,6 +70,8 @@ const DriverView: React.FC<DriverViewProps> = ({
     }
   }, [currentUser]);
   const [boardingMapTrip, setBoardingMapTrip] = useState<Trip | null>(null);
+  const [showVTPrompt, setShowVTPrompt] = useState(false);
+  const [vtInputTemp, setVtInputTemp] = useState('');
   const [tickets, setTickets] = useState<TicketSale[]>([]);
   const [formData, setFormData] = useState<any>({
     odometer: '',
@@ -306,14 +308,44 @@ const DriverView: React.FC<DriverViewProps> = ({
   const [couponCode, setCouponCode] = useState('');
   const [discountValue, setDiscountValue] = useState(0);
 
-  // Reset discount if payment method changes to avoid bypass of coupon restrictions
+  // Auto-fill and apply coupons based on selected payment method
   useEffect(() => {
-    if (discountValue > 0) {
+    if (!ticketingConfig || !ticketingConfig.active_coupons) {
+      if (discountValue > 0) {
+        setDiscountValue(0);
+        setCouponCode('');
+      }
+      return;
+    }
+
+    // Find any coupon specifically linked to this selected payment method, e.g. [PGTO: DINHEIRO]
+    const matchedCoupon = (ticketingConfig.active_coupons || []).find((c: any) => {
+      if (c.conditions && c.conditions.includes('[PGTO:')) {
+        const requiredMethod = c.conditions.match(/\[PGTO:\s*(.+?)\]/)?.[1];
+        return requiredMethod && requiredMethod.toUpperCase() === selectedPaymentMethod.toUpperCase();
+      }
+      return false;
+    });
+
+    if (matchedCoupon) {
+      setCouponCode(matchedCoupon.code);
+
+      // Apply coupon discount automatically
+      const route = routes.find(r => r.id === activeTrip?.route_id);
+      const sectionIndex = activeTrip?.current_section_index;
+      const basePrice = (sectionIndex === -1 || sectionIndex === undefined) 
+          ? (route?.price || 0) 
+          : (route?.sections?.[sectionIndex]?.price || 0);
+
+      const discount = matchedCoupon.type === 'PERCENT' ? (basePrice * (matchedCoupon.discount / 100)) : matchedCoupon.discount;
+      setDiscountValue(discount);
+      addToast(`Cupom ${matchedCoupon.code} aplicado automaticamente para a forma de pagamento ${selectedPaymentMethod}!`, "success");
+    } else {
+      // If there was an active payment-method-specific coupon but it doesn't apply, reset it
       setDiscountValue(0);
       setCouponCode('');
-      addToast("A forma de pagamento mudou. Re-aplique o cupom se necessário.", "info");
     }
-  }, [selectedPaymentMethod]);
+  }, [selectedPaymentMethod, ticketingConfig, activeTrip, routes]);
 
   const [paymentDetails, setPaymentDetails] = useState({
       received: '',
@@ -580,7 +612,14 @@ const DriverView: React.FC<DriverViewProps> = ({
                       <select 
                         className="w-full px-6 py-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl font-black text-slate-900 dark:text-white border-2 border-slate-100 dark:border-zinc-700 outline-none focus:border-yellow-400"
                         value={selectedPaymentMethod}
-                        onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setSelectedPaymentMethod(val);
+                            if (val === 'IMPCARD') {
+                                setVtInputTemp(paymentDetails.cardOrCpf || '');
+                                setShowVTPrompt(true);
+                            }
+                        }}
                       >
                           {ticketingConfig?.payment_methods?.map((m: string) => (
                               <option key={m} value={m.toUpperCase()}>{m.toUpperCase().replace('_', ' ')}</option>
@@ -607,7 +646,7 @@ const DriverView: React.FC<DriverViewProps> = ({
                         />
                         <button 
                             onClick={handleApplyCoupon}
-                            className="px-6 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px]"
+                            className="px-6 py-5 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl font-black uppercase text-[10px] active:scale-95 transition-transform"
                         >
                             Aplicar
                         </button>
@@ -1122,6 +1161,60 @@ const DriverView: React.FC<DriverViewProps> = ({
                     Compreendido
                   </button>
                 )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {showVTPrompt && (
+          <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/70 z-[150] flex items-center justify-center p-4 backdrop-blur-sm">
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white dark:bg-zinc-950 w-full max-w-md p-8 rounded-[2.5rem] border-4 border-yellow-400 shadow-2xl space-y-6 text-center"
+            >
+              <div className="space-y-2">
+                <span className="text-4xl inline-block animate-bounce mb-2">💳</span>
+                <h3 className="text-xl font-black uppercase italic text-slate-900 dark:text-white">Vale Transporte</h3>
+                <p className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider">Informe o CPF ou número do cartão do passageiro</p>
+              </div>
+              
+              <input 
+                type="text"
+                autoFocus
+                placeholder="000.000.000-00 ou Número"
+                value={vtInputTemp}
+                onChange={(e) => setVtInputTemp(e.target.value)}
+                className="w-full px-6 py-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl font-black text-center text-slate-900 dark:text-white border-2 border-yellow-400 outline-none"
+              />
+              
+              <div className="flex gap-3">
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setShowVTPrompt(false);
+                    setSelectedPaymentMethod('DINHEIRO');
+                  }}
+                  className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-slate-500 rounded-2xl font-black uppercase text-[10px]"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    if (!vtInputTemp.trim()) {
+                      addToast("Informe o CPF ou cartão do passageiro", "warning");
+                      return;
+                    }
+                    setPaymentDetails({ ...paymentDetails, cardOrCpf: vtInputTemp });
+                    setShowVTPrompt(false);
+                    addToast("Vale Transporte validado!", "success");
+                  }}
+                  className="flex-1 py-4 bg-yellow-400 hover:bg-yellow-500 text-slate-900 rounded-2xl font-black uppercase text-[10px]"
+                >
+                  Confirmar
+                </button>
               </div>
             </motion.div>
           </div>

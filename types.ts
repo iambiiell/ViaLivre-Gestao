@@ -264,6 +264,8 @@ export interface ActivationKey {
   plan_type: 'MONTHLY' | 'QUARTERLY' | 'SEMI_ANNUAL' | 'ANNUAL' | 'LIFETIME' | 'TRIAL';
   price: number;
   duration_months: number;
+  duration_type?: 'MONTHS' | 'DAYS';
+  duration_days?: number;
   is_used: boolean;
   activated_at?: string;
   expires_at?: string;

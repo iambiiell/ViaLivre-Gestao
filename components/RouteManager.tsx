@@ -72,33 +72,6 @@ const RouteManager: React.FC<RouteManagerProps> = ({
   const [selectedDirection, setSelectedDirection] = useState<'IDA' | 'VOLTA'>('IDA');
   const [selectedScope, setSelectedScope] = useState<string>('');
   const [showAllScopes, setShowAllScopes] = useState<boolean>(false);
-  const lastInteractionTimeRef = useRef<number>(Date.now());
-
-  useEffect(() => {
-    if (!isModalOpen || activeTab !== 'horario') return;
-
-    const interval = setInterval(() => {
-      // Check if 10 seconds have passed since the last interaction
-      if (Date.now() - lastInteractionTimeRef.current >= 10000) {
-        // Collect all available scope options
-        const availableScopes: string[] = ['']; // Rota integral represents empty string scope
-        if (formData.sections && formData.sections.length > 0) {
-          formData.sections.forEach(sec => {
-            availableScopes.push(sec.name);
-          });
-        }
-
-        if (availableScopes.length > 1) {
-          // Find the index of the currently selectedScope
-          const currentIndex = availableScopes.indexOf(selectedScope);
-          const nextIndex = (currentIndex + 1) % availableScopes.length;
-          setSelectedScope(availableScopes[nextIndex]);
-        }
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [isModalOpen, activeTab, selectedScope, formData.sections]);
   const [currentSignIdx, setCurrentSignIdx] = useState(0);
   const [newTimes, setNewTimes] = useState({ weekdays: '', saturday: '', sunday: '' });
   const [bulkInput, setBulkInput] = useState({ weekdays: '', saturday: '', sunday: '' });
@@ -322,7 +295,6 @@ const RouteManager: React.FC<RouteManagerProps> = ({
   const handleOpenModal = (route?: BusRoute) => {
     setSelectedScope('');
     setShowAllScopes(false);
-    lastInteractionTimeRef.current = Date.now();
     if (route) {
         setEditingId(route.id);
         const data = { ...initialForm, ...route };
@@ -708,7 +680,6 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                             type="button"
                                             onClick={() => {
                                                 setShowAllScopes(true);
-                                                lastInteractionTimeRef.current = Date.now();
                                             }}
                                             className="px-5 py-3.5 bg-indigo-600 hover:bg-slate-900 dark:hover:bg-zinc-800 text-white font-black text-[10px] uppercase rounded-2xl shadow-md border-2 border-slate-950 transition-all flex items-center justify-center gap-1 shrink-0"
                                         >
@@ -720,10 +691,10 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                         <p className="text-[9px] font-black text-indigo-500 uppercase italic mb-1">Escolha o novo escopo:</p>
                                         <div className="flex flex-wrap bg-white dark:bg-zinc-800 p-2 border-2 border-slate-200 dark:border-zinc-700 rounded-3xl gap-2">
                                             <button 
+                                                type="button"
                                                 onClick={() => {
                                                     setSelectedScope('');
                                                     setShowAllScopes(false);
-                                                    lastInteractionTimeRef.current = Date.now();
                                                 }}
                                                 className={`px-5 py-3.5 rounded-2xl font-black text-[10px] uppercase transition-all flex items-center gap-2 ${selectedScope === '' ? 'bg-yellow-400 text-slate-900 border-2 border-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-750 dark:hover:text-zinc-200'}`}
                                             >
@@ -735,11 +706,11 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                                 const isCurrent = selectedScope === sec.name;
                                                 return (
                                                     <button 
+                                                        type="button"
                                                         key={`scope-${sec.name}-${idx}`}
                                                         onClick={() => {
                                                             setSelectedScope(sec.name);
                                                             setShowAllScopes(false);
-                                                            lastInteractionTimeRef.current = Date.now();
                                                         }}
                                                         className={`px-5 py-3.5 rounded-2xl font-black text-[10px] uppercase transition-all truncate max-w-[200px] flex items-center gap-2 ${isCurrent ? 'bg-yellow-400 text-slate-900 border-2 border-slate-950 shadow-md' : 'text-slate-400 hover:text-slate-750'}`}
                                                         title={`Seção ${secNumber}: ${sec.name}`}
@@ -753,7 +724,6 @@ const RouteManager: React.FC<RouteManagerProps> = ({
                                                 type="button"
                                                 onClick={() => {
                                                     setShowAllScopes(false);
-                                                    lastInteractionTimeRef.current = Date.now();
                                                 }}
                                                 className="px-4 py-3 bg-red-100 hover:bg-red-550 text-red-650 hover:text-white rounded-2xl font-black text-[9px] uppercase transition-all"
                                             >

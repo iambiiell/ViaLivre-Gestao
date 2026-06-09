@@ -186,6 +186,7 @@ const ViewContent: React.FC<{
         if (!currentUser?.is_full_admin) return <Dashboard {...commonProps} allTrips={trips} />;
         return <LicenseManagement currentUser={currentUser} addToast={addToast} />;
       case 'subscriptions':
+        if (currentUser?.email !== 'via.nicolau.sa@gmail.com') return <Dashboard {...commonProps} allTrips={trips} />;
         return <SubscriptionManager currentUser={currentUser} addToast={addToast} />;
       case 'my-subscription': return <UserSubscription currentUser={currentUser} addToast={addToast} />;
       case 'system-config': return <SystemConfigManager roleConfigs={roleConfigs} onUpdateRoleConfig={rc => handleAction('update', 'role_configs', rc)} addToast={addToast} />;
@@ -1324,7 +1325,17 @@ const App: React.FC = () => {
   };
 
   if (isSubscriptionExpired()) {
-    return <SubscriptionExpired onLogout={() => handleSetUser(null)} />;
+    return (
+      <SubscriptionExpired 
+        onLogout={() => handleSetUser(null)} 
+        onKeyActivated={(newSub) => {
+          setSubscription(newSub);
+        }}
+        addToast={addToast}
+        currentUser={currentUser}
+        subscription={subscription}
+      />
+    );
   }
 
   const commonProps = { 
